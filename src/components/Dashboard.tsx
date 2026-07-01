@@ -31,11 +31,15 @@ interface DashboardProps {
 
 type TabType = "verdict" | "overview" | "loveaudit" | "timeline" | "lexicon" | "quirks" | "emojis" | "activity";
 
-export default function Dashboard({ stats, onReset, price = "₹149", checkoutUrl }: DashboardProps) {
+export default function Dashboard({ stats, onReset, price = "₹249", checkoutUrl }: DashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [revealReady, setRevealReady] = useState(false);
+  const [exitToastVisible, setExitToastVisible] = useState(false);
+  const [exitToastDismissed, setExitToastDismissed] = useState(false);
+  const premiumGalleryRef = React.useRef<HTMLDivElement>(null);
 
   const {
     participants, totalMessages, messageCounts, wordCounts,
@@ -157,7 +161,32 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
       }
     };
     frame();
+
+    // Trigger staggered reveal after a brief moment so the page paints first
+    setTimeout(() => setRevealReady(true), 100);
   }, []);
+
+  // Exit-intent toast: show a nudge when user scrolls past the premium gallery without buying
+  useEffect(() => {
+    if (isUnlocked || exitToastDismissed) return;
+    const el = premiumGalleryRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Fire when the gallery leaves the viewport (scrolled past it)
+        if (!entry.isIntersecting && entry.boundingClientRect.top < 0) {
+          // Small delay so it feels natural, not jarring
+          setTimeout(() => setExitToastVisible(true), 1500);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isUnlocked, exitToastDismissed]);
 
   // Format hourly data for Recharts
   const hourlyData = Array.from({ length: 24 }, (_, hour) => {
@@ -220,6 +249,8 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
 
   const handleUnlockSuccess = () => {
     setIsUnlocked(true);
+    setExitToastVisible(false);
+    setExitToastDismissed(true);
     try {
       // Lifetime, device-wide unlock — applies to every chat analyzed on this device.
       localStorage.setItem("lovelens_unlocked_v1", "true");
@@ -319,6 +350,17 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
     },
   ];
 
+  // Staggered reveal animation helper
+  const revealVariants = {
+    hidden: { opacity: 0, y: 30, scale: 0.97 },
+    visible: (delay: number) => ({
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: { duration: 0.5, delay, ease: "easeOut" as const }
+    }),
+  };
+
   return (
     <div className="relative min-h-screen pb-28 pt-6 overflow-x-hidden">
       <div className="screen-only">
@@ -375,7 +417,13 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
         </div>
 
         {/* Brand Banner */}
-        <div className="mb-8 text-center">
+        <motion.div
+          className="mb-8 text-center"
+          variants={revealVariants}
+          initial="hidden"
+          animate={revealReady ? "visible" : "hidden"}
+          custom={0}
+        >
           <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-100/60 px-4 py-1.5 text-[10px] font-black text-rose-500 tracking-widest uppercase mb-3 shadow-sm">
             <Sparkles size={10} className="animate-pulse" /> CHAT ANALYSIS WRAPPED
           </span>
@@ -385,10 +433,16 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
           <p className="mt-1.5 text-slate-400 text-xs font-semibold">
             All stats calculated locally inside your web browser.
           </p>
-        </div>
+        </motion.div>
 
         {/* Relationship Score Hero Card */}
-        <div className="mb-8 relative overflow-hidden rounded-3xl border border-rose-100/50 bg-gradient-to-br from-white/95 via-rose-50/20 to-indigo-50/30 p-6 shadow-md backdrop-blur-md">
+        <motion.div
+          className="mb-8 relative overflow-hidden rounded-3xl border border-rose-100/50 bg-gradient-to-br from-white/95 via-rose-50/20 to-indigo-50/30 p-6 shadow-md backdrop-blur-md"
+          variants={revealVariants}
+          initial="hidden"
+          animate={revealReady ? "visible" : "hidden"}
+          custom={0.15}
+        >
           {/* Decorative glows inside card */}
           <div className="absolute -top-10 -right-10 w-24 h-24 bg-rose-400/20 rounded-full blur-xl pointer-events-none" />
           <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-indigo-400/20 rounded-full blur-xl pointer-events-none" />
@@ -447,12 +501,18 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* (Free stats + premium gallery relocated below the flagship for conversion) */}
 
         {/* FLAGSHIP: "Who's Into Who More?" Interest Balance Hero */}
-        <div className="mb-8 relative overflow-hidden rounded-3xl border border-rose-300/40 bg-gradient-to-br from-rose-500 via-rose-500 to-indigo-600 p-6 md:p-8 shadow-xl">
+        <motion.div
+          className="mb-8 relative overflow-hidden rounded-3xl border border-rose-300/40 bg-gradient-to-br from-rose-500 via-rose-500 to-indigo-600 p-6 md:p-8 shadow-xl"
+          variants={revealVariants}
+          initial="hidden"
+          animate={revealReady ? "visible" : "hidden"}
+          custom={0.35}
+        >
           <div className="absolute -top-16 -right-16 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-indigo-300/20 rounded-full blur-3xl pointer-events-none" />
 
@@ -537,11 +597,17 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
               </>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* Premium Insights Gallery — the juicy locked stuff, surfaced high up */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <motion.div
+          ref={premiumGalleryRef}
+          className="mb-8"
+          variants={revealVariants}
+          initial="hidden"
+          animate={revealReady ? "visible" : "hidden"}
+          custom={0.55}
+        >          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div>
               <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
                 {isUnlocked ? <>Your Juiciest Insights <Sparkles size={16} className="text-rose-500 fill-rose-500" /></> : <>The Stuff You Really Want 👀</>}
@@ -596,10 +662,16 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
               </button>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Condensed Free Stats Strip */}
-        <div className="mb-8">
+        <motion.div
+          className="mb-8"
+          variants={revealVariants}
+          initial="hidden"
+          animate={revealReady ? "visible" : "hidden"}
+          custom={0.7}
+        >
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-center">
             Talking since {relationshipStartDate} · {daysTogether.toLocaleString()} days together
           </p>
@@ -620,10 +692,16 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Tab Selectors — natural-width scroll on mobile, equal-width on desktop */}
-        <div className="mb-8 flex overflow-x-auto rounded-2xl bg-slate-100 p-1.5 border border-slate-200/40 scrollbar-none snap-x gap-1">
+        <motion.div
+          className="mb-8 flex overflow-x-auto rounded-2xl bg-slate-100 p-1.5 border border-slate-200/40 scrollbar-none snap-x gap-1"
+          variants={revealVariants}
+          initial="hidden"
+          animate={revealReady ? "visible" : "hidden"}
+          custom={0.85}
+        >
           {(
             [
               { id: "overview", label: "Overview" },
@@ -649,10 +727,16 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
               {tab.locked && <Lock size={10} className="text-slate-400" />}
             </button>
           ))}
-        </div>
+        </motion.div>
 
         {/* Tab Content Display Area */}
-        <div className="min-h-[380px]">
+        <motion.div
+          className="min-h-[380px]"
+          variants={revealVariants}
+          initial="hidden"
+          animate={revealReady ? "visible" : "hidden"}
+          custom={1.0}
+        >
           
           {/* TAB 1: OVERVIEW */}
           {activeTab === "overview" && (
@@ -1273,7 +1357,7 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
             </div>
           )}
 
-        </div>
+        </motion.div>
 
       </div>
 
@@ -1306,6 +1390,49 @@ export default function Dashboard({ stats, onReset, price = "₹149", checkoutUr
           🔧 Reset unlock (dev)
         </button>
       )}
+
+      {/* Exit-intent toast nudge — slides up when user scrolls past locked content */}
+      <AnimatePresence>
+        {exitToastVisible && !isUnlocked && !exitToastDismissed && (
+          <motion.div
+            initial={{ opacity: 0, y: 80, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 40, scale: 0.95 }}
+            transition={{ type: "spring", damping: 20, stiffness: 300 }}
+            className="fixed bottom-20 sm:bottom-24 right-4 sm:right-6 z-50 max-w-[300px] w-full"
+          >
+            <div className="relative rounded-2xl border border-rose-200/60 bg-white/95 backdrop-blur-md p-4 shadow-2xl shadow-rose-200/30">
+              {/* Dismiss button */}
+              <button
+                onClick={() => { setExitToastVisible(false); setExitToastDismissed(true); }}
+                className="absolute top-2 right-2 h-5 w-5 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-xs hover:bg-rose-100 hover:text-rose-500 transition-colors"
+                aria-label="Dismiss"
+              >
+                ✕
+              </button>
+              <div className="flex items-start gap-3">
+                <span className="h-10 w-10 rounded-xl bg-gradient-to-br from-rose-500 to-indigo-500 text-white flex items-center justify-center flex-shrink-0 text-lg shadow-sm">
+                  👀
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-black text-slate-800 leading-tight">
+                    Psst — you scrolled past the good stuff
+                  </p>
+                  <p className="text-[10px] font-semibold text-slate-500 mt-1 leading-snug">
+                    You're 1 tap away from seeing who's really more invested.
+                  </p>
+                  <button
+                    onClick={() => { setExitToastVisible(false); setExitToastDismissed(true); setIsPaywallOpen(true); }}
+                    className="mt-2.5 rounded-lg bg-rose-500 hover:bg-rose-600 px-3.5 py-1.5 text-[11px] font-black text-white shadow-sm active:scale-95 transition-all"
+                  >
+                    Reveal now · {price}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div> {/* screen-only */}
 
     {/* PDF PRINT REPORT CONTAINER */}

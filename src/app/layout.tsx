@@ -69,6 +69,19 @@ export default function RootLayout({
             gtag('config', 'G-5628SM77EJ');
           `}
         </Script>
+        {/* Affonso affiliate/referral tracking — attributes creator referral links so
+            commissions can be calculated automatically. Only loads once a program ID
+            is configured (see NEXT_PUBLIC_AFFONSO_PROGRAM_ID in .env.local). */}
+        {process.env.NEXT_PUBLIC_AFFONSO_PROGRAM_ID && (
+          <Script
+            async
+            defer
+            src="https://cdn.affonso.io/js/pixel.min.js"
+            data-affonso={process.env.NEXT_PUBLIC_AFFONSO_PROGRAM_ID}
+            data-cookie_duration="30"
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   );

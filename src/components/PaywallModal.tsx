@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X, Lock, KeyRound, ShieldCheck, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
 import confetti from "canvas-confetti";
-import { isPaymentsConfigured, DODOPAYMENTS } from "../lib/dodopayments";
+import { isPaymentsConfigured, DODOPAYMENTS, appendAffiliateReferral } from "../lib/dodopayments";
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -14,7 +14,7 @@ interface PaywallModalProps {
   checkoutUrl?: string;
 }
 
-export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹149", checkoutUrl }: PaywallModalProps) {
+export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹249", checkoutUrl }: PaywallModalProps) {
   const [state, setState] = useState<"idle" | "processing" | "success">("idle");
   const [licenseKey, setLicenseKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -104,8 +104,25 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹1
 
   const openCheckout = () => {
     if (activeCheckoutUrl) {
-      window.open(activeCheckoutUrl, "_blank");
-      setState("processing");
+      // Build a redirect URL so Dodo sends the user back after payment
+      const redirectUrl = window.location.origin + window.location.pathname + "?status=succeeded";
+      const separator = activeCheckoutUrl.includes("?") ? "&" : "?";
+      let fullUrl = `${activeCheckoutUrl}${separator}redirect_url=${encodeURIComponent(redirectUrl)}`;
+
+      // If this visitor arrived via a creator's referral link, attach the
+      // Affonso referral metadata so the sale is attributed to them for commission.
+      fullUrl = appendAffiliateReferral(fullUrl);
+      
+      // Save current state so the report persists across the redirect
+      try {
+        // Stats are already saved in localStorage by page.tsx (SAVED_KEY)
+        localStorage.setItem("lovelens_pending_payment", "true");
+      } catch {
+        /* ignore */
+      }
+      
+      // Navigate in the same window for a reliable flow
+      window.location.href = fullUrl;
     }
   };
 
@@ -213,7 +230,7 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹1
                 <div className="mt-3 flex items-center justify-center gap-1.5">
                   <span className="text-xs text-slate-400 line-through font-semibold">{price.includes("$") ? "$9.99" : "₹499"}</span>
                   <span className="text-lg font-black text-rose-500">{price}</span>
-                  <span className="text-[10px] font-extrabold bg-rose-500 text-white px-2 py-0.5 rounded-full">Save 70%</span>
+                  <span className="text-[10px] font-extrabold bg-rose-500 text-white px-2 py-0.5 rounded-full">Save 50%</span>
                 </div>
               </div>
 
@@ -226,7 +243,7 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹1
                     <Lock size={16} /> Pay {price} {"&"} unlock instantly
                   </button>
                   <p className="text-[11px] text-slate-400 font-medium text-center leading-relaxed">
-                    Secure checkout opens right here. Your report unlocks automatically the moment payment completes.
+                    You'll be redirected to a secure checkout. After payment you'll return here automatically with your report unlocked.
                   </p>
 
                   {/* Fallback for people who paid elsewhere / on another device */}
