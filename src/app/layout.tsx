@@ -28,6 +28,9 @@ export const metadata: Metadata = {
   ],
   applicationName: "LoveLens",
   alternates: { canonical: "/" },
+  verification: {
+    google: "PVYhU-Z8ZWWL9vTl1BNOZNzJ73U238Siz0gYGdXOt7I",
+  },
   openGraph: {
     type: "website",
     url: "https://getlovelens.com",
