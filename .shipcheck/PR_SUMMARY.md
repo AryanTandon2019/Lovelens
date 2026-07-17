@@ -1,9 +1,8 @@
 # ShipCheck fix PR
-**Baseline:** B 88/100
+**Baseline:** A 92/100
 ## Patches
 - XSS risk via dangerouslySetInnerHTML
-- No security headers configuration found
-- No input validation library detected
+- No .env.example for required environment variables
 ## Notes
-- Review patch files under `.shipcheck/patches/`
+- Updated .gitignore for .env files
 Run your app tests before merging.
