@@ -10,6 +10,7 @@ import {
   Smile, Frown, Users, Activity, HelpCircle, FileText, ChevronRight, BarChart2,
   TrendingUp, BookOpen, SmilePlus
 } from "lucide-react";
+import { track } from "../lib/analytics";
 import { 
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, 
   ResponsiveContainer, CartesianGrid 
@@ -388,8 +389,21 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent("I just checked our chat on LoveLens 👀 Who's more into who? Check yours (it's private, works in your browser): https://getlovelens.com")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => track("share_partner_click", { unlocked: isUnlocked })}
+              className="flex items-center justify-center gap-1.5 rounded-full bg-[#20090f] hover:bg-black px-3.5 sm:px-4 py-2.5 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98]"
+              aria-label="Send LoveLens to your partner on WhatsApp"
+            >
+              <MessageCircle size={14} /> <span className="hidden sm:inline">Send to partner</span>
+            </a>
             <button
-              onClick={() => setIsShareOpen(true)}
+              onClick={() => {
+                track("share_card_open", { unlocked: isUnlocked });
+                setIsShareOpen(true);
+              }}
               className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-indigo-500 hover:opacity-95 px-3.5 sm:px-5 py-2.5 text-xs font-black text-white shadow-md shadow-rose-200 hover:scale-[1.01] active:scale-[0.98] transition-all cursor-pointer"
               aria-label="Share card"
             >

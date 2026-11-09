@@ -1,12 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fff7f7;
-  --foreground: #1e293b;
-  --primary: #ff4e88;
-  --primary-hover: #e03d72;
+  --background: #fdf7f5;
+  --foreground: #20090f;
+  --primary: #f43f5e;
+  --primary-deep: #be123c;
+  --primary-hover: #e11d48;
   --accent: #8b5cf6;
-  --card-bg: rgba(255, 255, 255, 0.8);
+  --ink: #20090f;
+  --ink-soft: #6b4a56;
+  --ink-faint: #a78e97;
+  --line: rgba(32, 9, 15, 0.09);
+  --card-bg: rgba(255, 255, 255, 0.86);
+  --gold: #c9a24b;
 }
 
 @theme inline {
@@ -15,18 +21,84 @@
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-accent: var(--accent);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display), ui-serif, Georgia, serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Custom Glassmorphism utility */
+::selection {
+  background: #fecdd3;
+  color: #881337;
+}
+
+.font-display {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  letter-spacing: -0.02em;
+}
+
+/* Premium SaaS surfaces */
+.premium-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(32, 9, 15, 0.08);
+  box-shadow:
+    0 1px 2px rgba(32, 9, 15, 0.05),
+    0 24px 48px -24px rgba(190, 18, 60, 0.18);
+}
+
+.premium-btn {
+  background: #20090f;
+  color: #fff;
+  box-shadow: 0 12px 24px -12px rgba(32, 9, 15, 0.5);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+.premium-btn:hover {
+  background: #000;
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px -12px rgba(32, 9, 15, 0.55);
+}
+.premium-btn:active {
+  transform: translateY(0) scale(0.99);
+}
+
+.premium-btn-rose {
+  background: linear-gradient(135deg, #fb4d6d 0%, #e11d48 55%, #9d174d 100%);
+  color: #fff;
+  box-shadow: 0 16px 32px -12px rgba(225, 29, 72, 0.55);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.premium-btn-rose:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+  box-shadow: 0 20px 40px -12px rgba(225, 29, 72, 0.6);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(32, 9, 15, 0.1);
+  background: rgba(255, 255, 255, 0.8);
+  padding: 0.35rem 0.8rem;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6b4a56;
+}
+
+/* Custom Glassmorphism utility (legacy, kept for dashboard) */
 .glass-card {
   background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(16px);
@@ -82,17 +154,18 @@ body {
 
 /* Custom scrollbar for modern feel */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #fff7f7;
+  background: #fdf7f5;
 }
 ::-webkit-scrollbar-thumb {
-  background: #fed7d7;
-  border-radius: 4px;
+  background: #f3c2cb;
+  border-radius: 8px;
+  border: 2px solid #fdf7f5;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #fbbf24;
+  background: #e89aa8;
 }
 
 /* Hide print-only report on the screen by default */

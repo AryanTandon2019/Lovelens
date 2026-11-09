@@ -7,20 +7,20 @@ import {
   Heart,
   UploadCloud,
   ShieldCheck,
-  HelpCircle,
   Sparkles,
   ChevronRight,
-  Smile,
-  Flame,
   Clock,
-  Award,
   Lock,
   Trash2,
-  Calendar,
-  MessageSquare,
-  BarChart2,
+  Check,
+  ArrowRight,
+  X,
+  ChevronDown,
+  WifiOff,
 } from "lucide-react";
 import { parseWhatsAppChat, ChatStats } from "../utils/chatParser";
+import { track, trackPurchaseOnce } from "../lib/analytics";
+import { verifyUnlock } from "../lib/verify";
 
 // Lazy-load heavy, post-upload UI so the landing page bundle stays small and fast.
 const Dashboard = dynamic(() => import("../components/Dashboard"), {
@@ -48,7 +48,9 @@ export default function Home() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [price, setPrice] = useState("₹249");
   const [checkoutUrl, setCheckoutUrl] = useState("");
-  const [mockupTab, setMockupTab] = useState<"report" | "share">("report");
+  const [inAppBrowser, setInAppBrowser] = useState(false);
+  const [inAppDismissed, setInAppDismissed] = useState(false);
+  const [paymentNotice, setPaymentNotice] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const SAVED_KEY = "lovelens_stats_v1";
@@ -71,84 +73,96 @@ export default function Home() {
     }
   }, []);
 
-  // Check for successful payment redirect parameters on load
+  // Back from checkout: Dodo adds ?payment_id=pay_...&status=succeeded. The payment is confirmed with Dodo on the
+  // server before anything unlocks, so typing "?status=succeeded" into the address bar no longer gives premium away.
   useEffect(() => {
+    let params: URLSearchParams;
     try {
-      const params = new URLSearchParams(window.location.search);
-      const status = params.get("status");
-      const paymentId = params.get("payment_id");
-
-      if (status === "succeeded" || paymentId) {
-        localStorage.setItem("lovelens_unlocked_v1", "true");
-        if (paymentId) {
-          localStorage.setItem("lovelens_license", paymentId);
-        }
-        // Clean URL search parameters to keep the layout pretty
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, document.title, newUrl);
-        
-        // Auto-load the saved report so the user lands directly on their unlocked dashboard
-        const saved = localStorage.getItem(SAVED_KEY);
-        if (saved) {
-          setStats(JSON.parse(saved));
-        }
-        // Clean the pending payment flag
-        localStorage.removeItem("lovelens_pending_payment");
-      }
+      params = new URLSearchParams(window.location.search);
+    } catch {
+      return;
+    }
+    const status = params.get("status");
+    const paymentId = params.get("payment_id") || "";
+    if (!status && !paymentId) return;
+    try {
+      window.history.replaceState({}, document.title, window.location.pathname);
     } catch {
       /* ignore */
     }
+    let cancelled = false;
+    (async () => {
+      const verdict = paymentId
+        ? await verifyUnlock({ payment_id: paymentId })
+        : { valid: false, reason: "no_payment_id" as string, configured: true };
+      // Until DODO_PAYMENTS_API_KEY is set on the server, a Dodo payment id coming back from checkout is trusted as
+      // before, so real buyers are never locked out by a missing setting.
+      const fallback = verdict.configured === false && /^pay_[A-Za-z0-9]{6,80}$/.test(paymentId);
+      if (cancelled) return;
+      try {
+        if (verdict.valid || fallback) {
+          localStorage.setItem("lovelens_unlocked_v1", "true");
+          localStorage.setItem("lovelens_license", paymentId);
+          trackPurchaseOnce(paymentId, "$4.99");
+          const saved = localStorage.getItem(SAVED_KEY);
+          if (saved) setStats(JSON.parse(saved));
+        } else {
+          track("unlock_rejected", { reason: verdict.reason || "unknown" });
+          setPaymentNotice(true);
+        }
+        localStorage.removeItem("lovelens_pending_payment");
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Regional pricing and checkout URL detection
+  // Regional pricing: India pays in INR, everyone else in USD. Decided by the country the visitor is in (Vercel's
+  // edge header via /api/geo), not by the phone's language: an Indian phone set to "English (India)" in Dubai or
+  // London should see $4.99. The device time zone is only the first guess while the lookup runs.
   useEffect(() => {
-    const defaultGlobalUrl = process.env.NEXT_PUBLIC_DODO_CHECKOUT_URL || "";
-    const defaultIndiaUrl =
-      process.env.NEXT_PUBLIC_DODO_CHECKOUT_URL_IN || defaultGlobalUrl;
-
-    const checkIsIndia = () => {
-      try {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const locale = navigator.language || "";
-        if (
-          tz.includes("Kolkata") ||
-          tz.includes("Calcutta") ||
-          locale.toLowerCase().includes("in")
-        ) {
-          return true;
-        }
-      } catch (e) {
-        // Fallback
-      }
-      return false;
+    const globalUrl = process.env.NEXT_PUBLIC_DODO_CHECKOUT_URL || "";
+    const indiaUrl = process.env.NEXT_PUBLIC_DODO_CHECKOUT_URL_IN || globalUrl;
+    const apply = (india: boolean) => {
+      setPrice(india ? "₹249" : "$4.99");
+      setCheckoutUrl(india ? indiaUrl : globalUrl);
     };
-
-    if (checkIsIndia()) {
-      setPrice("₹249");
-      setCheckoutUrl(defaultIndiaUrl);
-    } else {
-      setPrice("$4.99");
-      setCheckoutUrl(defaultGlobalUrl);
+    let tzIndia = false;
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+      tzIndia = /Kolkata|Calcutta/.test(tz);
+    } catch {
+      /* ignore */
     }
+    apply(tzIndia);
 
-    // Async geolocation check to refine detection
-    fetch("https://ipapi.co/json/")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && typeof data.country_code === "string") {
-          const isIndia = data.country_code.toUpperCase() === "IN";
-          if (isIndia) {
-            setPrice("₹249");
-            setCheckoutUrl(defaultIndiaUrl);
-          } else {
-            setPrice("$4.99");
-            setCheckoutUrl(defaultGlobalUrl);
-          }
-        }
+    const fromIpApi = () =>
+      fetch("https://ipapi.co/json/")
+        .then((r) => r.json())
+        .then((d) => {
+          if (typeof d?.country_code === "string") apply(d.country_code.toUpperCase() === "IN");
+        });
+
+    fetch("/api/geo", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const country = typeof d?.country === "string" ? d.country.toUpperCase() : "";
+        if (country) apply(country === "IN");
+        else return fromIpApi();
       })
-      .catch((err) => {
-        console.warn("LoveLens regional detection IP fallback failed:", err);
-      });
+      .catch(() => fromIpApi().catch(() => undefined));
+  }, []);
+
+  // Instagram / Facebook open links in their own browser, where picking a downloaded chat file can be awkward.
+  useEffect(() => {
+    try {
+      setInAppBrowser(/Instagram|FBAN|FBAV|FB_IAB/i.test(navigator.userAgent || ""));
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   // Persist the report whenever it changes (clearing is explicit, via discard).
@@ -164,6 +178,7 @@ export default function Home() {
 
   // Re-open the saved report from the upload screen.
   const viewLastReport = () => {
+    track("saved_report_open");
     try {
       const saved = localStorage.getItem(SAVED_KEY);
       if (saved) setStats(JSON.parse(saved));
@@ -200,6 +215,7 @@ export default function Home() {
 
   // Helper to save parsed chat into local history array.
   const saveParsedChat = (parsed: ChatStats) => {
+    track("report_generated", { messages: parsed.totalMessages });
     setStats(parsed);
     const newHistoryItem: HistoryItem = {
       id: `${parsed.participants.join("-")}-${parsed.relationshipStartDate}-${parsed.totalMessages}-${Date.now()}`,
@@ -253,7 +269,9 @@ export default function Home() {
   };
 
   const processFile = (file: File) => {
+    track("chat_file_selected", { file_type: file.name.split(".").pop() || "unknown" });
     if (!file.name.endsWith(".txt") && !file.name.endsWith(".zip")) {
+      track("report_error", { reason: "wrong_file_type" });
       setErrorMsg(
         "Please upload a `.txt` or `.zip` file exported from WhatsApp.",
       );
@@ -311,6 +329,7 @@ export default function Home() {
                 setTimeout(() => {
                   const parsed = parseWhatsAppChat(text);
                   if (parsed.participants.length < 2) {
+                    track("report_error", { reason: "fewer_than_two_senders" });
                     setErrorMsg(
                       "We couldn't identify at least 2 senders in this chat. Make sure you exported the correct WhatsApp chat history.",
                     );
@@ -350,6 +369,7 @@ export default function Home() {
         setTimeout(() => {
           const parsed = parseWhatsAppChat(text);
           if (parsed.participants.length < 2) {
+            track("report_error", { reason: "fewer_than_two_senders" });
             setErrorMsg(
               "We couldn't identify at least 2 senders in this chat. Make sure you exported the correct WhatsApp chat history.",
             );
@@ -393,7 +413,18 @@ export default function Home() {
   };
 
   const handleUploadClick = () => {
+    track("upload_click");
     fileInputRef.current?.click();
+  };
+
+  const openGuide = (where: string) => {
+    track("export_guide_open", { where });
+    setIsTutorialOpen(true);
+  };
+
+  const scrollToUpload = (where: string) => {
+    track("cta_click", { where });
+    document.getElementById("upload")?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   // Go back to the upload screen WITHOUT deleting the saved active report.
@@ -404,42 +435,10 @@ export default function Home() {
     }
   };
 
-  // Mock static data for the dashboard mockup preview
-  const previewFeatures = [
-    {
-      title: "Relationship Style",
-      value: "Speed Dialers",
-      desc: "Instant replies! You two practically live in the chat.",
-      icon: <Award className="text-yellow-500" size={18} />,
-      color: "bg-yellow-50 border-yellow-100",
-    },
-    {
-      title: "Who Texts More?",
-      value: "You (58%)",
-      desc: "You send 12,839 messages compared to their 9,283.",
-      icon: <Smile className="text-rose-500" size={18} />,
-      color: "bg-rose-50 border-rose-100",
-    },
-    {
-      title: "Who Replies Faster?",
-      value: "Them (12 min)",
-      desc: "They reply within minutes, while you take about 35 mins.",
-      icon: <Clock className="text-indigo-500" size={18} />,
-      color: "bg-indigo-50 border-indigo-100",
-    },
-    {
-      title: "Streak Record",
-      value: "241 Days",
-      desc: "You haven't missed a single day of chatting for months!",
-      icon: <Flame className="text-orange-500" size={18} />,
-      color: "bg-orange-50 border-orange-100",
-    },
-  ];
-
   // Render parsed Dashboard view
   if (stats) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-rose-50 via-rose-100/50 to-indigo-50 text-slate-800">
+      <div className="min-h-screen bg-[#fdf7f5] text-slate-800">
         <Dashboard
           stats={stats}
           onReset={resetChat}
@@ -453,7 +452,7 @@ export default function Home() {
   // Render Loader view
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#FFF7F7] via-rose-50 to-indigo-50 p-6 text-slate-800">
+      <div className="relative flex min-h-screen items-center justify-center bg-[#fdf7f5] p-6 text-[#20090f]">
         {/* Decorative background glows */}
         <div className="absolute top-[20%] left-[10%] w-72 h-72 bg-rose-200/30 rounded-full blur-[100px] pointer-events-none animate-pulse-soft" />
         <div
@@ -564,93 +563,80 @@ export default function Home() {
   }
 
   return (
-    <div className="relative min-h-screen bg-[#FFF7F7] text-slate-800 flex flex-col justify-between overflow-hidden">
-      {/* Decorative Large Glowing Blur Bubbles */}
-      <div className="absolute top-[10%] left-[-100px] w-[350px] h-[350px] bg-rose-200/40 rounded-full blur-[120px] pointer-events-none animate-pulse-soft" />
-      <div
-        className="absolute bottom-[30%] right-[-100px] w-[400px] h-[400px] bg-indigo-200/30 rounded-full blur-[130px] pointer-events-none animate-pulse-soft"
-        style={{ animationDelay: "2s" }}
-      />
+    <div className="relative min-h-screen bg-[#fdf7f5] text-[#20090f] flex flex-col overflow-x-hidden">
+      {/* one soft rose light from the top right */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[720px] bg-[radial-gradient(55%_50%_at_75%_0%,rgba(251,77,109,0.16),transparent_70%)]" />
 
-      {/* 1. Header/Nav */}
-      <header className="sticky top-0 z-40 border-b border-rose-100/40 bg-white/70 backdrop-blur-md px-6 py-4">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <div
-            onClick={resetChat}
-            className="flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
-          >
-            <img
-              src="/lovelens_logo.png"
-              alt="LoveLens Logo"
-              className="h-8 w-8 object-contain rounded-lg shadow-sm"
-            />
-            <span className="text-xl font-black tracking-tight text-slate-800">
-              Love<span className="text-rose-500">Lens</span>
-            </span>
-          </div>
-          <nav className="hidden md:flex items-center gap-6 text-sm font-semibold text-slate-600">
-            <a
-              href="#how-it-works"
-              onClick={(e) => {
-                e.preventDefault();
-                setIsTutorialOpen(true);
-              }}
-              className="hover:text-rose-500 transition-colors"
-            >
-              How to Export
-            </a>
-            <a
-              href="#security"
-              className="hover:text-rose-500 transition-colors"
-            >
-              Privacy Promise
-            </a>
-            <a
-              href="#features"
-              className="hover:text-rose-500 transition-colors"
-            >
-              Features
-            </a>
+      {/* 1. Header */}
+      <header className="sticky top-0 z-40 border-b border-[rgba(32,9,15,0.06)] bg-[#fdf7f5]/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
+          <button onClick={resetChat} className="flex items-center gap-2" aria-label="LoveLens home">
+            <img src="/lovelens_logo.png" alt="" className="h-8 w-8 rounded-xl object-contain" />
+            <span className="text-[17px] font-semibold tracking-tight">LoveLens</span>
+          </button>
+          <nav className="hidden md:flex items-center gap-7 text-sm text-[#6b4a56]">
+            <a href="#how" className="hover:text-[#20090f] transition-colors">How it works</a>
+            <a href="#features" className="hover:text-[#20090f] transition-colors">What you&apos;ll see</a>
+            <a href="#pricing" className="hover:text-[#20090f] transition-colors">Pricing</a>
+            <a href="#security" className="hover:text-[#20090f] transition-colors">Privacy</a>
           </nav>
-          <div>
-            <button
-              onClick={() => setIsTutorialOpen(true)}
-              className="flex items-center gap-1.5 rounded-full bg-rose-500 hover:bg-rose-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-rose-200 hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              How to Export ↗
-            </button>
-          </div>
+          <button onClick={() => scrollToUpload("header")} className="premium-btn rounded-full px-4 py-2 text-sm font-semibold">
+            Check my chat
+          </button>
         </div>
       </header>
 
-      {/* Resume saved report banner */}
+      {/* Instagram / Facebook in-app browser tip */}
+      {inAppBrowser && !inAppDismissed && (
+        <div className="relative z-30 mx-auto mt-3 w-full max-w-6xl px-5">
+          <div className="flex items-start gap-3 rounded-2xl border border-[rgba(32,9,15,0.08)] bg-white px-4 py-3 text-[13px] leading-snug text-[#20090f] shadow-sm">
+            <span className="mt-0.5 text-base">💡</span>
+            <p className="flex-1">
+              You&apos;re in Instagram&apos;s browser. If choosing your chat file doesn&apos;t work, tap <strong>⋯</strong> at the top and{" "}
+              <strong>Open in browser</strong>.
+            </p>
+            <button onClick={() => setInAppDismissed(true)} className="text-[#a78e97] hover:text-[#20090f]" aria-label="Dismiss">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Payment could not be confirmed */}
+      {paymentNotice && (
+        <div className="relative z-30 mx-auto mt-3 w-full max-w-6xl px-5">
+          <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] leading-snug text-[#20090f]">
+            <span className="mt-0.5 text-base">⚠️</span>
+            <p className="flex-1">
+              We couldn&apos;t confirm a payment on this link. If you paid, open your report, tap <strong>Unlock</strong>, then{" "}
+              <strong>Already purchased?</strong> and paste the payment ID from your receipt email. Or write to{" "}
+              <a className="underline" href="mailto:hello@getlovelens.com">hello@getlovelens.com</a>.
+            </p>
+            <button onClick={() => setPaymentNotice(false)} className="text-[#a78e97] hover:text-[#20090f]" aria-label="Dismiss">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Resume saved report */}
       {hasSavedReport && (
-        <div className="relative z-30 mx-auto w-full max-w-5xl px-6 pt-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl border border-rose-200/60 bg-white/80 backdrop-blur-md px-4 py-3 shadow-sm">
-            <div className="flex items-center gap-2.5 text-center sm:text-left">
-              <span className="h-9 w-9 rounded-xl bg-rose-500 text-white flex items-center justify-center flex-shrink-0">
-                <Heart size={16} className="fill-white" />
+        <div className="relative z-30 mx-auto w-full max-w-6xl px-5 pt-4">
+          <div className="premium-card flex flex-col sm:flex-row items-center justify-between gap-3 rounded-2xl px-4 py-3">
+            <div className="flex items-center gap-3 text-center sm:text-left">
+              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#fff1f3] text-[#e11d48]">
+                <Heart size={16} className="fill-[#e11d48]" />
               </span>
               <div>
-                <p className="text-sm font-black text-slate-800">
-                  Welcome back 👋
-                </p>
-                <p className="text-xs font-semibold text-slate-500">
-                  Your last report is saved on this device.
-                </p>
+                <p className="text-sm font-semibold">Welcome back</p>
+                <p className="text-xs text-[#6b4a56]">Your last report is saved on this device.</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <button
-                onClick={viewLastReport}
-                className="flex-1 sm:flex-none rounded-full bg-rose-500 hover:bg-rose-600 px-5 py-2.5 text-xs font-black text-white shadow-md shadow-rose-200 active:scale-95 transition-all"
-              >
-                View last report →
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <button onClick={viewLastReport} className="premium-btn flex-1 sm:flex-none rounded-full px-5 py-2.5 text-xs font-semibold">
+                View last report <ArrowRight size={13} className="inline -mt-0.5" />
               </button>
-              <button
-                onClick={discardSavedReport}
-                className="rounded-full border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-500 hover:text-rose-500 hover:border-rose-200 transition-all"
-              >
+              <button onClick={discardSavedReport} className="rounded-full border border-[rgba(32,9,15,0.12)] px-4 py-2.5 text-xs font-semibold text-[#6b4a56] hover:text-[#e11d48]">
                 Discard
               </button>
             </div>
@@ -658,787 +644,445 @@ export default function Home() {
         </div>
       )}
 
-      {/* 2. Hero Section */}
-      <section className="relative px-6 py-12 md:py-20 flex-1 flex flex-col justify-center">
-        {/* Floating background graphics */}
-        <div className="absolute top-10 right-[15%] text-rose-300/15 select-none pointer-events-none animate-float">
-          <Heart size={44} className="fill-rose-300/10 text-rose-300/20" />
-        </div>
-        <div className="absolute bottom-20 left-[10%] text-rose-300/10 select-none pointer-events-none animate-float-slow">
-          <Heart size={56} className="fill-rose-200/5 text-rose-200/10" />
-        </div>
-        <div className="absolute top-1/2 left-[5%] text-indigo-300/20 select-none pointer-events-none animate-float-fast">
-          <Sparkles
-            size={32}
-            className="fill-indigo-200/10 text-indigo-300/20"
-          />
-        </div>
-
-        <div className="mx-auto max-w-5xl grid grid-cols-1 md:grid-cols-12 gap-12 items-center relative z-10">
-          {/* Left Column: Headline and Upload zone */}
-          <div className="md:col-span-7 space-y-6">
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 border border-rose-100/50 px-3 py-1 text-xs font-bold text-rose-500 shadow-sm">
-              <Sparkles size={12} className="text-rose-400 fill-rose-400" />{" "}
-              100% Secure & Client-Side (No Servers)
-            </div>
-
-            <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-800 leading-tight">
-              Understand your relationship like{" "}
-              <span className="bg-gradient-to-r from-rose-500 to-rose-400 bg-clip-text text-transparent underline decoration-rose-200 decoration-wavy">
-                never before
-              </span>
-              .
+      {/* 2. Hero */}
+      <section className="relative px-5 pt-10 pb-16 md:pt-20 md:pb-24">
+        <div className="mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 md:grid-cols-12">
+          <div className="md:col-span-7">
+            <span className="eyebrow">
+              <ShieldCheck size={13} className="text-[#e11d48]" /> Private WhatsApp chat analysis
+            </span>
+            <h1 className="font-display mt-5 text-[46px] leading-[1.02] md:text-[76px]">
+              Who&apos;s more into who?
+              <br />
+              <span className="italic text-[#e11d48]">Your chat already knows.</span>
             </h1>
-
-            <p className="text-sm md:text-base text-slate-500 leading-relaxed max-w-xl font-medium">
-              Upload your WhatsApp chat history and instantly find out who texts
-              more, who replies faster, who said "I love you" first — and the
-              big one: who's actually more into who. Beautiful, shareable, and
-              100% private.
+            <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-[#6b4a56]">
+              Upload your WhatsApp chat and get the receipts: who texts first, who replies faster, who double-texts, and
+              who&apos;s more invested. It never leaves your phone.
             </p>
 
-            {/* Drag & Drop Upload Zone */}
-            <div className="space-y-3">
+            {/* Upload */}
+            <div id="upload" className="premium-card mt-8 rounded-[28px] p-4 md:p-5">
               <div
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
-                onClick={handleUploadClick}
-                className="group relative flex flex-col items-center justify-center border-2 border-dashed border-rose-200 hover:border-rose-400 bg-white hover:bg-rose-50/20 p-8 rounded-3xl cursor-pointer shadow-lg shadow-rose-100/50 hover:shadow-xl transition-all duration-300 text-center"
+                className="rounded-[22px] border border-dashed border-[rgba(225,29,72,0.3)] bg-[#fffafa] px-5 py-6 text-center"
               >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept=".txt,.zip"
-                  className="hidden"
-                />
-
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 border border-rose-100 group-hover:scale-110 group-hover:bg-rose-500 group-hover:text-white transition-all duration-300 mb-4">
-                  <UploadCloud size={28} />
-                </div>
-
-                <h3 className="text-lg font-black text-slate-800 mb-1">
-                  Upload your chat log
-                </h3>
-
-                <p className="text-xs text-slate-400 font-semibold mb-3">
-                  Drag and drop your WhatsApp `.txt` or `.zip` export file here
-                </p>
-
-                <button className="rounded-full bg-rose-500 group-hover:bg-rose-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-rose-200 transition-all">
-                  Select Chat File
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".txt,.zip" className="hidden" />
+                <button
+                  onClick={handleUploadClick}
+                  className="premium-btn-rose inline-flex w-full items-center justify-center gap-2 rounded-2xl px-7 py-4 text-base font-semibold sm:w-auto"
+                >
+                  <UploadCloud size={20} /> Choose your chat file
                 </button>
+                <p className="mt-3 text-[13px] text-[#6b4a56]">
+                  Your WhatsApp export (.txt or .zip). Or drop it here.
+                </p>
               </div>
 
-              {/* Error message */}
               {errorMsg && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-bold text-red-500 text-center animate-pulse">
-                  ⚠️ {errorMsg}
+                <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-center text-[13px] font-medium text-red-600">
+                  {errorMsg}
                 </div>
               )}
 
-              {/* Upload Assistance Trigger */}
-              <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-slate-500">
-                <span>Not sure how?</span>
-                <button
-                  onClick={() => setIsTutorialOpen(true)}
-                  className="text-rose-500 hover:text-rose-600 underline flex items-center gap-0.5"
-                >
-                  See 3-tap export guide <ChevronRight size={12} />
-                </button>
-              </div>
+              <ExportSteps onFullGuide={() => openGuide("hero_steps")} />
             </div>
 
-            {/* Trust signals (honest — no fabricated reviews) */}
-            <div className="pt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-slate-500">
-              <span className="inline-flex items-center gap-1.5">
-                <ShieldCheck size={15} className="text-green-500" /> 100%
-                private
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Lock size={13} className="text-rose-500" /> No sign-up
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Sparkles
-                  size={13}
-                  className="text-indigo-500 fill-indigo-500"
-                />{" "}
-                Instant results
-              </span>
+            {/* Trust */}
+            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-[#6b4a56]">
+              <span className="inline-flex items-center gap-1.5"><Lock size={14} className="text-[#e11d48]" /> Runs on your device</span>
+              <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-[#e11d48]" /> No sign-up</span>
+              <span className="inline-flex items-center gap-1.5"><Clock size={14} className="text-[#e11d48]" /> Results in seconds</span>
             </div>
           </div>
 
-          {/* Right Column: Beautiful Interactive Preview Mockup Card */}
-          <div className="md:col-span-5 flex flex-col items-center justify-center">
-            <div className="relative w-full max-w-[340px]">
-              {/* Tab Selector */}
-              <div className="flex gap-1 p-1.5 bg-rose-50/70 border border-rose-100/40 rounded-full mb-4 shadow-sm backdrop-blur-md">
-                <button
-                  type="button"
-                  onClick={() => setMockupTab("report")}
-                  className={`flex-1 py-2 px-3 rounded-full text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                    mockupTab === "report"
-                      ? "bg-rose-500 text-white shadow-sm"
-                      : "text-slate-500 hover:text-rose-500"
-                  }`}
-                >
-                  <BarChart2 size={13} />
-                  <span>Report Preview</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMockupTab("share")}
-                  className={`flex-1 py-2 px-3 rounded-full text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                    mockupTab === "share"
-                      ? "bg-rose-500 text-white shadow-sm"
-                      : "text-slate-500 hover:text-rose-500"
-                  }`}
-                >
-                  <Sparkles size={13} />
-                  <span>Share Card</span>
-                </button>
-              </div>
-
-              <AnimatePresence mode="wait">
-                {mockupTab === "report" ? (
-                  <motion.div
-                    key="report"
-                    initial={{ opacity: 0, scale: 0.96 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.96 }}
-                    transition={{ duration: 0.2 }}
-                    className="relative w-full rounded-3xl border border-white/60 bg-white/70 p-6 shadow-xl backdrop-blur-md"
-                  >
-                    <div className="absolute -top-3 -right-3 rounded-full bg-rose-500 text-white p-2 shadow-lg animate-bounce z-10">
-                      <Sparkles size={16} />
-                    </div>
-
-                    <div className="flex items-center justify-between border-b border-rose-100/50 pb-4 mb-4">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src="/lovelens_logo.png"
-                          alt="Logo"
-                          className="h-8 w-8 object-contain rounded-lg shadow-sm"
-                        />
-                        <div>
-                          <h4 className="text-xs font-extrabold text-slate-800">
-                            Your Love Report
-                          </h4>
-                          <p className="text-[9px] font-semibold text-slate-400">
-                            Preview Data
-                          </p>
-                        </div>
-                      </div>
-                      <div className="rounded-full bg-rose-50 border border-rose-100 px-2 py-0.5 text-[9px] font-extrabold text-rose-500 uppercase tracking-wider">
-                        Live Preview
-                      </div>
-                    </div>
-
-                    {/* Relationship Score */}
-                    <div className="text-center bg-rose-50/50 border border-rose-100/40 rounded-2xl p-3 mb-4 flex flex-col items-center justify-center">
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
-                        Relationship Score
-                      </span>
-                      <span className="text-3xl font-black text-rose-500 block">
-                        92%
-                      </span>
-                      <div className="flex items-center gap-1 text-[10px] text-slate-500 font-semibold mt-0.5">
-                        <span>You share a super strong bond!</span>
-                        <Heart
-                          size={10}
-                          className="fill-rose-500 text-rose-500 inline"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Mini Features List */}
-                    <div className="space-y-3">
-                      {previewFeatures.map((feat, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex items-start gap-3 border rounded-2xl p-3 bg-white/90 shadow-sm`}
-                        >
-                          <div className="mt-0.5">{feat.icon}</div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                {feat.title}
-                              </span>
-                            </div>
-                            <h5 className="text-sm font-black text-slate-800 mt-0.5">
-                              {feat.value}
-                            </h5>
-                            <p className="text-[10px] text-slate-500 font-medium leading-normal mt-0.5">
-                              {feat.desc}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-rose-100/40 text-center">
-                      <span className="text-[10px] font-bold text-slate-400">
-                        Full Premium Report · One-time {price}
-                      </span>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="share"
-                    initial={{ opacity: 0, scale: 0.96 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.96 }}
-                    transition={{ duration: 0.2 }}
-                    className="relative w-full overflow-hidden rounded-[32px] p-6 text-white shadow-2xl border border-white/25"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, #FF3366 0%, #FF5E97 45%, #6F2CFF 100%)",
-                      boxShadow: "0 25px 60px -15px rgba(111, 44, 255, 0.5)",
-                    }}
-                  >
-                    {/* glows */}
-                    <div className="absolute -top-16 -right-10 h-44 w-44 rounded-full bg-white/20 blur-2xl pointer-events-none" />
-                    <div className="absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-indigo-400/20 blur-2xl pointer-events-none" />
-
-                    <div className="relative z-10">
-                      {/* Brand */}
-                      <div className="flex items-center justify-center gap-1.5 mb-6">
-                        <img
-                          src="/lovelens_logo.png"
-                          alt="LoveLens"
-                          className="h-6 w-6 object-contain bg-white/10 rounded-md border border-white/10"
-                        />
-                        <span className="text-base font-black tracking-tight">
-                          Love<span className="text-white/80">Lens</span>
-                        </span>
-                      </div>
-
-                      {/* Couple + VS avatars */}
-                      <div className="flex items-center justify-center gap-6 mb-6">
-                        <div className="relative">
-                          <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-rose-400 to-amber-300 blur-sm opacity-60 pointer-events-none" />
-                          <div className="relative h-14 w-14 rounded-2xl bg-white text-rose-500 flex items-center justify-center text-lg font-black shadow-lg border border-white/30">
-                            AX
-                          </div>
-                        </div>
-                        <div className="h-8 w-8 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-inner animate-pulse">
-                          <Heart className="fill-white text-white" size={14} />
-                        </div>
-                        <div className="relative">
-                          <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-indigo-400 to-purple-400 blur-sm opacity-60 pointer-events-none" />
-                          <div className="relative h-14 w-14 rounded-2xl bg-white text-indigo-600 flex items-center justify-center text-lg font-black shadow-lg border border-white/30">
-                            JU
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-center text-base font-black mb-1 tracking-tight truncate">
-                        Alex &amp; Julia
-                      </p>
-
-                      {/* Chemistry score circular gauge design */}
-                      <div className="relative mx-auto my-6 h-28 w-28 flex items-center justify-center">
-                        {/* Rotating dashed ring */}
-                        <div className="absolute inset-0 rounded-full border-2 border-dashed border-white/35 animate-[spin_25s_linear_infinite] pointer-events-none" />
-                        {/* Glowing inner circle */}
-                        <div className="h-24 w-24 rounded-full bg-white/12 border border-white/20 backdrop-blur-md flex flex-col items-center justify-center shadow-xl">
-                          <span className="text-[8px] font-bold uppercase tracking-[0.15em] text-white/70">
-                            Chemistry
-                          </span>
-                          <span className="text-3xl font-black text-white tracking-tighter mt-0.5">
-                            92%
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Mini stats */}
-                      <div className="grid grid-cols-3 gap-2.5 mb-6">
-                        <div className="rounded-2xl bg-white/8 border border-white/15 p-3 text-center shadow-md">
-                          <MessageSquare
-                            size={13}
-                            className="mx-auto mb-1 text-rose-200"
-                          />
-                          <span className="block text-sm font-black leading-tight text-white">
-                            22,122
-                          </span>
-                          <span className="block text-[8px] font-semibold uppercase tracking-wider text-white/60 mt-0.5">
-                            Texts
-                          </span>
-                        </div>
-                        <div className="rounded-2xl bg-white/8 border border-white/15 p-3 text-center shadow-md">
-                          <Calendar
-                            size={13}
-                            className="mx-auto mb-1 text-indigo-200"
-                          />
-                          <span className="block text-sm font-black leading-tight text-white">
-                            241
-                          </span>
-                          <span className="block text-[8px] font-semibold uppercase tracking-wider text-white/60 mt-0.5">
-                            Days
-                          </span>
-                        </div>
-                        <div className="rounded-2xl bg-white/8 border border-white/15 p-3 text-center shadow-md">
-                          <Flame
-                            size={13}
-                            className="mx-auto mb-1 text-amber-300"
-                          />
-                          <span className="block text-sm font-black leading-tight text-white">
-                            120
-                          </span>
-                          <span className="block text-[8px] font-semibold uppercase tracking-wider text-white/60 mt-0.5">
-                            Streak
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Verdict line */}
-                      <div className="rounded-2xl bg-gradient-to-r from-black/25 to-black/10 border border-white/10 p-3.5 text-center flex flex-col items-center justify-center shadow-inner">
-                        <span className="block text-[8px] font-extrabold uppercase tracking-[0.2em] text-white/60 mb-1">
-                          Who's more into who?
-                        </span>
-                        <div className="flex items-center justify-center gap-1.5 text-xs font-black bg-white/10 border border-white/10 rounded-full px-3 py-1 text-white shadow-sm mt-1.5">
-                          <Lock size={11} className="text-white/80" />
-                          <span>Locked · getlovelens.com</span>
-                        </div>
-                      </div>
-
-                      {/* Footer / call to action */}
-                      <div className="flex items-center justify-center gap-1.5 mt-5 text-[9px] font-black text-white/90">
-                        <Heart
-                          size={10}
-                          className="fill-white text-white animate-pulse"
-                        />
-                        <span>
-                          Analyze your chats free at{" "}
-                          <span className="underline">getlovelens.com</span>
-                        </span>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+          {/* Preview */}
+          <div className="md:col-span-5">
+            <ReportPreview price={price} />
           </div>
         </div>
       </section>
 
-      {/* 2.5 History / Old Chats Section */}
+      {/* Saved analyses */}
       {history.length > 0 && (
-        <section className="relative px-6 pb-16 z-20">
-          <div className="mx-auto max-w-5xl">
-            <div className="rounded-3xl border border-rose-100/60 bg-white/70 p-6 md:p-8 shadow-xl backdrop-blur-md">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="h-9 w-9 rounded-xl bg-rose-500 text-white flex items-center justify-center shadow-sm">
-                  <Heart size={16} className="fill-white" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-800">
-                    Your Saved Analyses History
-                  </h3>
-                  <p className="text-[11px] font-semibold text-slate-500">
-                    Access previous reports instantly. Saved 100% locally in
-                    your browser.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <AnimatePresence>
-                  {history.map((item) => (
-                    <motion.div
-                      key={item.id}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.2 }}
-                      className="group relative flex flex-col justify-between rounded-2xl border border-rose-100/50 bg-white/95 p-5 shadow-sm hover:border-rose-300 hover:shadow-md transition-all duration-300"
+        <section className="relative px-5 pb-16">
+          <div className="mx-auto max-w-6xl">
+            <h3 className="font-display text-3xl">Your saved reports</h3>
+            <p className="mt-1 text-sm text-[#6b4a56]">Stored only in this browser.</p>
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <AnimatePresence>
+                {history.map((item) => (
+                  <motion.div
+                    key={item.id}
+                    initial={{ opacity: 0, scale: 0.97 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.97 }}
+                    transition={{ duration: 0.2 }}
+                    className="premium-card group relative flex flex-col justify-between rounded-2xl p-5"
+                  >
+                    {deletingId === item.id && (
+                      <div className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-2xl bg-white/95 p-4 text-center">
+                        <p className="mb-3 text-sm font-semibold">Delete this report?</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteHistoryItem(item.id, e);
+                              setDeletingId(null);
+                            }}
+                            className="rounded-full bg-[#e11d48] px-4 py-1.5 text-xs font-semibold text-white"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingId(null);
+                            }}
+                            className="rounded-full border border-[rgba(32,9,15,0.12)] px-4 py-1.5 text-xs font-semibold text-[#6b4a56]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingId(item.id);
+                      }}
+                      className="absolute right-3 top-3 rounded-full p-1.5 text-[#a78e97] hover:bg-[#fff1f3] hover:text-[#e11d48]"
+                      title="Delete from history"
                     >
-                      {/* Delete confirmation overlay */}
-                      {deletingId === item.id && (
-                        <div className="absolute inset-0 z-30 rounded-2xl bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center">
-                          <Trash2
-                            className="text-rose-500 mb-1 animate-bounce"
-                            size={20}
-                          />
-                          <p className="text-xs font-black text-slate-800 mb-2">
-                            Delete this report?
-                          </p>
-                          <div className="flex items-center gap-1.5 justify-center">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteHistoryItem(item.id, e);
-                                setDeletingId(null);
-                              }}
-                              className="rounded-full bg-rose-500 hover:bg-rose-600 px-3 py-1 text-[10px] font-black text-white shadow-sm transition-all cursor-pointer"
-                            >
-                              Yes, Delete
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeletingId(null);
-                              }}
-                              className="rounded-full border border-slate-200 hover:bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-500 transition-all cursor-pointer"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Delete item button */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeletingId(item.id);
-                        }}
-                        className="absolute top-3 right-3 rounded-full p-1 text-slate-300 hover:bg-rose-50 hover:text-rose-500 transition-all cursor-pointer z-20"
-                        title="Delete from history"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-
-                      <div className="pr-4">
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">
-                          Analyzed {item.date}
-                        </span>
-                        <h4 className="text-sm font-black text-slate-800 mt-1 flex items-center gap-1">
-                          {item.names} 💘
-                        </h4>
-                        <div className="mt-3 space-y-1">
-                          <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
-                            <span>📊</span> {item.messageCount.toLocaleString()}{" "}
-                            messages
-                          </p>
-                          <p className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
-                            <span>📅</span> Start: {item.startDate}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between">
-                        <span className="text-[10px] font-black text-rose-500">
-                          {item.stats.interestBalance?.p1Score
-                            ? `Score: ${item.stats.interestBalance.p1Score}% / ${item.stats.interestBalance.p2Score}%`
-                            : "Click to load"}
-                        </span>
-                        <button
-                          onClick={() => setStats(item.stats)}
-                          className="rounded-full bg-rose-50 hover:bg-rose-500 hover:text-white px-3.5 py-1.5 text-[10px] font-black text-rose-500 transition-all cursor-pointer"
-                        >
-                          View Report →
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
+                      <Trash2 size={13} />
+                    </button>
+                    <div className="pr-6">
+                      <span className="text-xs text-[#a78e97]">Analyzed {item.date}</span>
+                      <h4 className="mt-1 text-base font-semibold">{item.names}</h4>
+                      <p className="mt-2 text-[13px] text-[#6b4a56]">
+                        {item.messageCount.toLocaleString()} messages · since {item.startDate}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setStats(item.stats)}
+                      className="mt-4 self-start rounded-full bg-[#fff1f3] px-4 py-1.5 text-xs font-semibold text-[#e11d48] hover:bg-[#e11d48] hover:text-white transition-colors"
+                    >
+                      Open report <ArrowRight size={12} className="inline -mt-0.5" />
+                    </button>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           </div>
         </section>
       )}
 
-      {/* 3. Trust strip (honest value props, no fabricated press) */}
-      <section className="bg-slate-50/50 border-y border-slate-100 py-6 px-6">
-        <div className="mx-auto max-w-5xl flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-xs font-bold text-slate-500 uppercase tracking-widest">
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck size={14} className="text-green-500" /> Parsed in your
-            browser
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Lock size={13} className="text-rose-500" /> Nothing uploaded
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Clock size={13} className="text-indigo-500" /> Results in seconds
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Sparkles size={13} className="text-rose-500" /> Shareable card
-          </span>
+      {/* 3. How it works */}
+      <section id="how" className="relative border-t border-[rgba(32,9,15,0.06)] px-5 py-20">
+        <div className="mx-auto max-w-6xl">
+          <span className="eyebrow">How it works</span>
+          <h2 className="font-display mt-4 text-4xl md:text-5xl">Three steps. About a minute.</h2>
+          <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-3">
+            {[
+              { n: "1", t: "Export your chat", d: "In WhatsApp: open the chat, then Export chat, Without media. Takes 30 seconds." },
+              { n: "2", t: "Choose the file here", d: "It's read right here in your browser. Nothing is uploaded to any server." },
+              { n: "3", t: "See the receipts", d: `Your stats are free. Unlock who's more into who and the full report, one-time ${price}.` },
+            ].map((step) => (
+              <div key={step.n} className="premium-card rounded-3xl p-6">
+                <span className="font-display text-5xl text-[#e11d48]">{step.n}</span>
+                <h3 className="mt-3 text-lg font-semibold">{step.t}</h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-[#6b4a56]">{step.d}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* 4. Features Section (Mobile Swipeable Carousel, Desktop Grid) */}
-      <section id="features" className="py-16 px-6 bg-white">
+      {/* 4. What you'll see */}
+      <section id="features" className="relative bg-white/60 border-y border-[rgba(32,9,15,0.06)] px-5 py-20">
+        <div className="mx-auto max-w-6xl">
+          <span className="eyebrow">What you&apos;ll see</span>
+          <h2 className="font-display mt-4 text-4xl md:text-5xl">Everything your chat says about you two.</h2>
+          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="sm:col-span-2 rounded-3xl bg-gradient-to-br from-[#fb4d6d] via-[#e11d48] to-[#7c3aed] p-7 text-white shadow-[0_30px_60px_-30px_rgba(225,29,72,0.6)]">
+              <span className="rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]">The verdict</span>
+              <h3 className="font-display mt-4 text-4xl leading-tight">Who&apos;s more into who?</h3>
+              <p className="mt-3 max-w-md text-[15px] leading-relaxed text-white/85">
+                We weigh who starts conversations, who replies faster, who double-texts and who shows more affection, then
+                crown the more invested one.
+              </p>
+            </div>
+            {FEATURES.map((f) => (
+              <div key={f.title} className="premium-card rounded-3xl p-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-2xl">{f.icon}</span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                      f.free ? "bg-emerald-50 text-emerald-700" : "bg-[#fbf3e1] text-[#8a6a1f]"
+                    }`}
+                  >
+                    {f.free ? "Free" : "Full report"}
+                  </span>
+                </div>
+                <h3 className="mt-4 text-[17px] font-semibold">{f.title}</h3>
+                <p className="mt-1.5 text-[14px] leading-relaxed text-[#6b4a56]">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 5. Pricing */}
+      <section id="pricing" className="relative px-5 py-20">
         <div className="mx-auto max-w-5xl">
-          <div className="text-center mb-12">
-            <span className="inline-block rounded-full bg-rose-50 border border-rose-100 px-3 py-1 text-xs font-bold text-rose-500 tracking-wide mb-2">
-              POWERFUL INSIGHTS
-            </span>
-            <h2 className="text-3xl font-black text-slate-800 tracking-tight">
-              Everything you need to know about your bond
-            </h2>
-            <p className="mt-2 text-slate-500 text-sm md:text-base max-w-xl mx-auto">
-              Get detailed relationship analysis calculated locally in
-              milliseconds.
-            </p>
+          <div className="text-center">
+            <span className="eyebrow">Pricing</span>
+            <h2 className="font-display mt-4 text-4xl md:text-5xl">Start free. Unlock the answer.</h2>
           </div>
-
-          {/* Layout: Grid on desktop, horizontal scroll on mobile */}
-          <div className="flex md:grid md:grid-cols-3 gap-6 overflow-x-auto snap-x md:overflow-visible pb-4 md:pb-0 px-2 md:px-0 -mx-6 md:mx-0 scrollbar-none">
-            {/* Feature 1: Who's Into Who (Flagship Premium) */}
-            <div className="min-w-[280px] md:min-w-0 snap-center rounded-3xl border border-rose-200/60 bg-gradient-to-br from-rose-500 to-indigo-600 p-6 shadow-md flex flex-col justify-between ml-6 md:ml-0">
-              <div>
-                <div className="h-10 w-10 bg-white/20 text-white rounded-2xl flex items-center justify-center mb-4 backdrop-blur-sm">
-                  <Heart className="fill-white" size={18} />
-                </div>
-                <h3 className="text-lg font-black text-white mb-2 flex items-center gap-1.5">
-                  Who's Into Who?{" "}
-                  <span className="text-[10px] bg-white text-rose-600 px-2 py-0.5 rounded-full font-bold uppercase">
-                    Prem
-                  </span>
-                </h3>
-                <p className="text-sm text-white/85 leading-relaxed font-medium">
-                  Our flagship verdict. We weigh who initiates, replies faster,
-                  double-texts, and shows more affection to crown the more
-                  invested partner.
-                </p>
-              </div>
+          <div className="mt-10 grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="premium-card rounded-3xl p-7">
+              <h3 className="text-lg font-semibold">Free</h3>
+              <p className="font-display mt-2 text-5xl">{price.includes("₹") ? "₹0" : "$0"}</p>
+              <ul className="mt-6 space-y-3 text-[15px] text-[#20090f]">
+                {["Who texts more", "Who replies faster", "Your longest streak", "Your relationship score"].map((x) => (
+                  <li key={x} className="flex items-start gap-2.5"><Check size={16} className="mt-0.5 flex-shrink-0 text-emerald-600" /> {x}</li>
+                ))}
+              </ul>
             </div>
-
-            {/* Feature 2: Reply Time */}
-            <div className="min-w-[280px] md:min-w-0 snap-center rounded-3xl border border-rose-100/50 bg-rose-50/20 p-6 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="h-10 w-10 bg-indigo-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-md shadow-indigo-200">
-                  <Clock size={18} />
-                </div>
-                <h3 className="text-lg font-black text-slate-800 mb-2">
-                  Reply Time Analysis
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Measure reply speeds to see who leaves the other on read, and
-                  who is the instant replier.
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 3: Chat Streaks */}
-            <div className="min-w-[280px] md:min-w-0 snap-center rounded-3xl border border-rose-100/50 bg-rose-50/20 p-6 shadow-sm flex flex-col justify-between mr-6 md:mr-0">
-              <div>
-                <div className="h-10 w-10 bg-orange-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-md shadow-orange-200">
-                  <Flame size={18} />
-                </div>
-                <h3 className="text-lg font-black text-slate-800 mb-2">
-                  Chat Streaks
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Calculate your consecutive texting days streak and see if you
-                  have kept the spark alive!
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 4: Flags Audit (Premium) */}
-            <div className="min-w-[280px] md:min-w-0 snap-center rounded-3xl border border-rose-100/50 bg-rose-50/20 p-6 shadow-sm flex flex-col justify-between ml-6 md:ml-0 md:mt-4">
-              <div>
-                <div className="h-10 w-10 bg-red-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-md shadow-red-200">
-                  <Lock size={16} />
-                </div>
-                <h3 className="text-lg font-black text-slate-800 mb-2 flex items-center gap-1.5">
-                  Flags Audit{" "}
-                  <span className="text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full font-bold uppercase">
-                    Prem
-                  </span>
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Audit your relationship flags: check dry responses count (Red
-                  Flags) vs romantic keywords count (Green Flags).
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 5: Desperation Meter (Premium) */}
-            <div className="min-w-[280px] md:min-w-0 snap-center rounded-3xl border border-rose-100/50 bg-rose-50/20 p-6 shadow-sm flex flex-col justify-between md:mt-4">
-              <div>
-                <div className="h-10 w-10 bg-purple-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-md shadow-purple-200">
-                  <Lock size={16} />
-                </div>
-                <h3 className="text-lg font-black text-slate-800 mb-2 flex items-center gap-1.5">
-                  Desperation Meter{" "}
-                  <span className="text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full font-bold uppercase">
-                    Prem
-                  </span>
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Tracks the record for consecutive messages sent without
-                  getting a reply. Who is chasing who?
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 6: Greeting Champ (Premium) */}
-            <div className="min-w-[280px] md:min-w-0 snap-center rounded-3xl border border-rose-100/50 bg-rose-50/20 p-6 shadow-sm flex flex-col justify-between md:mt-4">
-              <div>
-                <div className="h-10 w-10 bg-yellow-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-md shadow-yellow-200">
-                  <Lock size={16} />
-                </div>
-                <h3 className="text-lg font-black text-slate-800 mb-2 flex items-center gap-1.5">
-                  Greeting Champions{" "}
-                  <span className="text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full font-bold uppercase">
-                    Prem
-                  </span>
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Count who sends the first good morning greeting (6am-10am) and
-                  who texts last before bedtime.
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 7: Honeymoon Timeline (Premium) */}
-            <div className="min-w-[280px] md:min-w-0 snap-center rounded-3xl border border-rose-100/50 bg-rose-50/20 p-6 shadow-sm flex flex-col justify-between md:mt-4">
-              <div>
-                <div className="h-10 w-10 bg-emerald-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-md shadow-emerald-200">
-                  <Lock size={16} />
-                </div>
-                <h3 className="text-lg font-black text-slate-800 mb-2 flex items-center gap-1.5">
-                  Honeymoon Timeline{" "}
-                  <span className="text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full font-bold uppercase">
-                    Prem
-                  </span>
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Track message frequency trends over time to identify your
-                  Honeymoon phase peak and overall Spark shift.
-                </p>
-              </div>
-            </div>
-
-            {/* Feature 8: Inside Jokes & Lexicon (Premium) */}
-            <div className="min-w-[280px] md:min-w-0 snap-center rounded-3xl border border-rose-100/50 bg-rose-50/20 p-6 shadow-sm flex flex-col justify-between mr-6 md:mr-0 md:mt-4">
-              <div>
-                <div className="h-10 w-10 bg-indigo-500 text-white rounded-2xl flex items-center justify-center mb-4 shadow-md shadow-indigo-200">
-                  <Lock size={16} />
-                </div>
-                <h3 className="text-lg font-black text-slate-800 mb-2 flex items-center gap-1.5">
-                  Lexicon & Inside Jokes{" "}
-                  <span className="text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full font-bold uppercase">
-                    Prem
-                  </span>
-                </h3>
-                <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Count pet names, apologies, questions asked, and check your
-                  slang overlap matching score.
-                </p>
-              </div>
+            <div className="relative rounded-3xl bg-[#20090f] p-7 text-white shadow-[0_40px_80px_-40px_rgba(32,9,15,0.7)]">
+              <span className="absolute right-6 top-6 rounded-full bg-[#e11d48] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]">The answer</span>
+              <h3 className="text-lg font-semibold">Full report</h3>
+              <p className="mt-2 flex items-end gap-2">
+                <span className="font-display text-5xl">{price}</span>
+                <span className="pb-1.5 text-sm text-white/60">one-time · no subscription</span>
+              </p>
+              <ul className="mt-6 space-y-3 text-[15px]">
+                {[
+                  "Who's more into who: the verdict",
+                  "Who said \"I love you\" first",
+                  "Who chases more and the longest silence",
+                  "Red & green flags, honeymoon timeline, inside jokes",
+                  "A shareable love card",
+                ].map((x) => (
+                  <li key={x} className="flex items-start gap-2.5"><Check size={16} className="mt-0.5 flex-shrink-0 text-[#fb7185]" /> {x}</li>
+                ))}
+              </ul>
+              <button onClick={() => scrollToUpload("pricing")} className="premium-btn-rose mt-7 w-full rounded-2xl py-3.5 text-[15px] font-semibold">
+                Check my chat first
+              </button>
+              <p className="mt-3 text-center text-xs text-white/55">Secure checkout by Dodo Payments · taxes included</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 5. Security & Privacy Focus Section (Wi-Fi Tip) */}
-      <section
-        id="security"
-        className="py-16 px-6 bg-slate-50 border-t border-slate-100"
-      >
-        <div className="mx-auto max-w-4xl">
-          <div className="rounded-3xl border border-white/60 bg-white/70 p-8 md:p-12 shadow-lg backdrop-blur-md text-center max-w-3xl mx-auto space-y-6">
-            <div className="mx-auto h-16 w-16 bg-green-500/10 border border-green-500/25 rounded-2xl flex items-center justify-center text-green-600 mb-2">
-              <ShieldCheck size={36} />
-            </div>
-
-            <h2 className="text-2xl md:text-3xl font-black text-slate-800">
-              Your Privacy is Our #1 Priority
-            </h2>
-
-            <p className="text-sm md:text-base text-slate-500 leading-relaxed font-medium">
-              We never upload your chat history to any servers. All
-              calculations, parsing, and stats rendering happen 100% locally in
-              your web browser.
-            </p>
-
-            {/* Pro Tip Box */}
-            <div className="p-4 bg-green-50 border border-green-200/50 rounded-2xl inline-block text-left text-xs max-w-md mx-auto">
-              <span className="font-bold text-green-700 block mb-0.5">
-                💡 Try This Privacy Test:
+      {/* 6. Privacy */}
+      <section id="security" className="relative px-5 pb-20">
+        <div className="mx-auto max-w-6xl overflow-hidden rounded-[36px] bg-[#20090f] px-7 py-12 text-white md:px-14 md:py-16">
+          <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-2">
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">
+                <ShieldCheck size={13} /> Privacy
               </span>
-              <p className="text-green-600 leading-relaxed font-semibold">
-                Once the page is loaded,{" "}
-                <strong className="font-black">
-                  turn off your Wi-Fi / Mobile Data
-                </strong>{" "}
-                and upload your chat file. The analyzer will work perfectly
-                because it runs entirely on your device.
+              <h2 className="font-display mt-5 text-4xl leading-tight md:text-5xl">Your chat never leaves your phone.</h2>
+              <p className="mt-4 text-[16px] leading-relaxed text-white/70">
+                LoveLens reads the file inside your browser. There are no servers that see your messages and no account to
+                create.
+              </p>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+              <WifiOff size={26} className="text-[#fb7185]" />
+              <h3 className="mt-4 text-lg font-semibold">Don&apos;t take our word for it</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-white/70">
+                Load this page, switch on airplane mode, then choose your chat. It still works, because everything happens
+                on your device.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* 6. Why couples use it (honest — no fabricated testimonial) */}
-      <section className="py-16 px-6 bg-white">
+      {/* 7. FAQ */}
+      <section className="relative px-5 pb-20">
         <div className="mx-auto max-w-3xl">
-          <div className="rounded-3xl bg-rose-50/40 border border-rose-100/50 p-8 md:p-10 relative overflow-hidden flex flex-col md:flex-row items-center gap-8 shadow-sm">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-full blur-2xl" />
-
-            {/* 3D Clay Hearts Graphic */}
-            <div className="w-28 h-28 relative flex-shrink-0 animate-float overflow-hidden rounded-3xl shadow-sm border border-rose-100">
-              <img
-                src="/love_hearts_clay.png"
-                alt="Clay Hearts Hugging"
-                className="w-full h-full object-cover"
-              />
-            </div>
-
-            <div className="space-y-4 text-center md:text-left">
-              <span className="inline-block rounded-full bg-rose-50 border border-rose-100 px-3 py-1 text-[10px] font-black text-rose-500 tracking-widest uppercase">
-                Settle the debate
-              </span>
-              <blockquote className="text-base md:text-lg font-black text-slate-800 leading-snug">
-                "Who texts more? Who replies faster? Who's actually more into
-                who?" LoveLens reads your real chat history and gives you the
-                receipts — privately, in seconds.
-              </blockquote>
-              <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-                Everything runs on your device. Your messages never leave your
-                browser.
-              </p>
-            </div>
+          <h2 className="font-display text-center text-4xl md:text-5xl">Questions</h2>
+          <div className="mt-8 space-y-3">
+            {FAQ(price).map((f) => (
+              <details key={f.q} className="premium-card group rounded-2xl px-5 py-4">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[15px] font-semibold">
+                  {f.q}
+                  <ChevronDown size={18} className="flex-shrink-0 text-[#a78e97] transition-transform group-open:rotate-180" />
+                </summary>
+                <p className="mt-3 text-[15px] leading-relaxed text-[#6b4a56]">{f.a}</p>
+              </details>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* 7. Footer */}
-      <footer className="border-t border-rose-100 bg-slate-50 py-12 px-6 text-center text-xs font-semibold text-slate-400">
-        <div className="mx-auto max-w-5xl space-y-4">
-          <div className="flex items-center justify-center gap-1.5">
-            <img
-              src="/lovelens_logo.png"
-              alt="Logo"
-              className="h-4 w-4 object-contain rounded"
-            />
-            <span className="text-slate-800 font-black">LoveLens</span>
-            <span>© 2026. Made with love for couples worldwide.</span>
+      {/* 8. Final call */}
+      <section className="relative px-5 pb-24">
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 className="font-display text-4xl md:text-6xl">Settle it tonight.</h2>
+          <p className="mt-3 text-[17px] text-[#6b4a56]">Who&apos;s more into who? Your chat has the answer.</p>
+          <button onClick={() => scrollToUpload("final")} className="premium-btn-rose mt-7 inline-flex items-center gap-2 rounded-2xl px-8 py-4 text-base font-semibold">
+            Check my chat <ArrowRight size={18} />
+          </button>
+        </div>
+      </section>
+
+      {/* 9. Footer */}
+      <footer className="border-t border-[rgba(32,9,15,0.07)] px-5 py-10 text-center text-[13px] text-[#a78e97]">
+        <div className="mx-auto max-w-5xl space-y-3">
+          <div className="flex items-center justify-center gap-2">
+            <img src="/lovelens_logo.png" alt="" className="h-5 w-5 rounded object-contain" />
+            <span className="font-semibold text-[#20090f]">LoveLens</span>
+            <span>© 2026</span>
           </div>
-          <div className="flex items-center justify-center gap-5 text-[11px] font-bold text-slate-500">
-            <a
-              href="/privacy"
-              className="hover:text-rose-500 transition-colors"
-            >
-              Privacy Policy
-            </a>
-            <a href="/terms" className="hover:text-rose-500 transition-colors">
-              Terms of Service
-            </a>
-            <a
-              href="mailto:hello@getlovelens.com"
-              className="hover:text-rose-500 transition-colors"
-            >
-              Contact
-            </a>
+          <div className="flex items-center justify-center gap-5 text-[#6b4a56]">
+            <a href="/privacy" className="hover:text-[#e11d48]">Privacy</a>
+            <a href="/terms" className="hover:text-[#e11d48]">Terms</a>
+            <a href="mailto:hello@getlovelens.com" className="hover:text-[#e11d48]">Contact</a>
           </div>
-          <p className="max-w-md mx-auto leading-relaxed text-[10px]">
-            LoveLens is an independent analyzer. WhatsApp is a registered
-            trademark of WhatsApp Inc. This website is not affiliated with or
-            endorsed by WhatsApp.
+          <p className="mx-auto max-w-md text-xs leading-relaxed">
+            LoveLens is an independent analyzer. WhatsApp is a registered trademark of WhatsApp Inc. This website is not
+            affiliated with or endorsed by WhatsApp.
           </p>
         </div>
       </footer>
 
-      {/* 8. Modals/Drawers */}
-      <UploadTutorial
-        isOpen={isTutorialOpen}
-        onClose={() => setIsTutorialOpen(false)}
-      />
+      <UploadTutorial isOpen={isTutorialOpen} onClose={() => setIsTutorialOpen(false)} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- landing helpers ----------------------------------
+
+const FEATURES: { icon: string; title: string; desc: string; free: boolean }[] = [
+  { icon: "⚡", title: "Reply speed", desc: "Who replies in minutes and who leaves the other on read.", free: true },
+  { icon: "🔥", title: "Chat streaks", desc: "Your longest run of days without missing a chat.", free: true },
+  { icon: "🚩", title: "Flags audit", desc: "Dry replies against sweet ones: your red and green flags.", free: false },
+  { icon: "📲", title: "Who chases more", desc: "The longest run of texts sent without a reply.", free: false },
+  { icon: "☀️", title: "Good morning champion", desc: "Who sends the first good morning, and who says goodnight last.", free: false },
+  { icon: "📈", title: "Honeymoon timeline", desc: "When your chat peaked, and how the spark has moved since.", free: false },
+];
+
+const FAQ = (price: string): { q: string; a: string }[] => [
+  {
+    q: "Is it really private?",
+    a: "Yes. Your chat file is read inside your browser and never sent to any server. You can test it: load the page, turn on airplane mode, then choose your chat.",
+  },
+  {
+    q: "How do I export my WhatsApp chat?",
+    a: "iPhone: open the chat, tap the name at the top, scroll down, tap Export Chat, then Without Media, and save it to Files. Android: open the chat, tap ⋮, More, Export chat, Without media, and save it. Then choose that file here.",
+  },
+  {
+    q: "What's free and what's in the full report?",
+    a: `Who texts more, reply speed, streaks and your relationship score are free. The full report (one-time ${price}) unlocks who's more into who, who said "I love you" first, who chases more, the flags audit, your timeline, inside jokes and a shareable card.`,
+  },
+  {
+    q: "Is it a subscription?",
+    a: "No. You pay once and the full report unlocks on this device.",
+  },
+  {
+    q: "Do I need an account?",
+    a: "No sign-up and no email. Choose your chat and your report appears.",
+  },
+];
+
+/** The export steps right under the upload button, for iPhone or Android (guessed from the device). */
+function ExportSteps({ onFullGuide }: { onFullGuide: () => void }) {
+  const [device, setDevice] = useState<"iphone" | "android">("iphone");
+  useEffect(() => {
+    try {
+      if (/Android/i.test(navigator.userAgent || "")) setDevice("android");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const steps =
+    device === "iphone"
+      ? ["Open the chat in WhatsApp and tap their name at the top", "Scroll down, tap Export Chat, then Without Media", "Save to Files, come back here and choose the file"]
+      : ["Open the chat in WhatsApp and tap ⋮ at the top right", "Tap More, then Export chat, then Without media", "Save it to your phone, come back here and choose the file"];
+  return (
+    <div className="mt-4 px-1">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[13px] font-semibold">How to export your chat</p>
+        <div className="flex rounded-full bg-[#f4ebe8] p-0.5 text-xs font-semibold">
+          {(["iphone", "android"] as const).map((d) => (
+            <button
+              key={d}
+              onClick={() => setDevice(d)}
+              className={`rounded-full px-3 py-1 transition-colors ${device === d ? "bg-white text-[#20090f] shadow-sm" : "text-[#6b4a56]"}`}
+            >
+              {d === "iphone" ? "iPhone" : "Android"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <ol className="mt-3 space-y-2">
+        {steps.map((step, i) => (
+          <li key={step} className="flex items-start gap-2.5 text-[13px] leading-snug text-[#6b4a56]">
+            <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#fff1f3] text-[11px] font-semibold text-[#e11d48]">
+              {i + 1}
+            </span>
+            {step}
+          </li>
+        ))}
+      </ol>
+      <button onClick={onFullGuide} className="mt-3 text-[13px] font-semibold text-[#e11d48] hover:underline">
+        See the guide with pictures <ChevronRight size={13} className="inline -mt-0.5" />
+      </button>
+    </div>
+  );
+}
+
+/** The report preview in the hero: the verdict card with the answer blurred, the way the real report teases it. */
+function ReportPreview({ price }: { price: string }) {
+  return (
+    <div className="relative mx-auto w-full max-w-[380px]">
+      <div className="absolute -inset-6 -z-10 rounded-[48px] bg-[radial-gradient(closest-side,rgba(225,29,72,0.18),transparent)]" />
+      <div className="premium-card rounded-[32px] p-4">
+        <div className="flex items-center justify-between px-1 text-xs text-[#a78e97]">
+          <span className="font-semibold text-[#6b4a56]">Your LoveLens report</span>
+          <span className="rounded-full bg-[#fff1f3] px-2 py-0.5 font-semibold text-[#e11d48]">Example</span>
+        </div>
+        <div className="mt-3 rounded-[24px] bg-gradient-to-br from-[#fb4d6d] via-[#e11d48] to-[#7c3aed] p-5 text-white">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">The big question</p>
+          <p className="font-display mt-1 text-[34px] leading-[1.05]">Who&apos;s more into who?</p>
+          <div className="mt-5 flex items-center justify-between">
+            <div className="flex flex-col items-center gap-1.5">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-xl font-semibold text-[#e11d48] ring-4 ring-white/25">R</span>
+              <span className="text-xs text-white/80">Riya</span>
+            </div>
+            <span className="text-xs font-semibold text-white/70">VS</span>
+            <div className="flex flex-col items-center gap-1.5">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-xl font-semibold text-[#4f46e5] ring-4 ring-white/25">A</span>
+              <span className="text-xs text-white/80">Arjun</span>
+            </div>
+          </div>
+          <div className="mt-5 h-2.5 overflow-hidden rounded-full bg-white/25">
+            <div className="h-full w-[87%] rounded-full bg-white/85 blur-[2px]" />
+          </div>
+          <p className="mt-3 text-sm text-white/85">
+            One of you carries <span className="inline-block select-none font-semibold blur-[5px]">87%</span> of the effort
+          </p>
+        </div>
+        <div className="mt-3 space-y-2">
+          {[
+            { k: "Texts first", v: "Arjun · 63%" },
+            { k: "Replies faster", v: "Arjun · 3 min" },
+            { k: "Longest streak", v: "212 days" },
+          ].map((row) => (
+            <div key={row.k} className="flex items-center justify-between rounded-2xl bg-[#fdf7f5] px-4 py-3 text-sm">
+              <span className="text-[#6b4a56]">{row.k}</span>
+              <span className="font-semibold">{row.v}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-center text-xs text-[#a78e97]">Full report · one-time {price}</p>
+      </div>
     </div>
   );
 }

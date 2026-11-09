@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, Lock, KeyRound, ShieldCheck, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
+import { X, Lock, KeyRound, ShieldCheck, CheckCircle2, Sparkles, Loader2, Check } from "lucide-react";
 import confetti from "canvas-confetti";
 import { isPaymentsConfigured, DODOPAYMENTS, appendAffiliateReferral } from "../lib/dodopayments";
+import { track, priceToValue, rememberCheckoutPrice } from "../lib/analytics";
+import { verifyUnlock } from "../lib/verify";
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -20,31 +22,41 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹2
   const [error, setError] = useState<string | null>(null);
   const [showKeyEntry, setShowKeyEntry] = useState(false);
 
+  // Funnel: the paywall was shown
+  useEffect(() => {
+    if (isOpen) track("paywall_open", priceToValue(price));
+  }, [isOpen, price]);
+
   // Handle Dodo message events and storage events (cross-tab sync)
   useEffect(() => {
     if (!isOpen) return;
 
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin.includes("dodopayments.com")) {
-        const payload = event.data;
-        const eventType = payload?.event_type || payload?.event;
-
-        if (
-          eventType === "checkout.success" ||
-          eventType === "payment.succeeded" ||
-          (eventType === "checkout.status" && payload?.data?.status === "succeeded")
-        ) {
-          try {
-            localStorage.setItem("lovelens_unlocked_v1", "true");
-            if (payload?.data?.checkout_id) {
-              localStorage.setItem("lovelens_license", payload.data.checkout_id);
-            }
-          } catch {
-            /* ignore */
-          }
-          finishUnlock();
+      // Only Dodo's own pages, and only a payment the server confirms with Dodo, can unlock.
+      if (!/^https:\/\/([a-z0-9-]+\.)*dodopayments\.com$/.test(event.origin)) return;
+      const payload = event.data;
+      const eventType = payload?.event_type || payload?.event;
+      const paymentId: string = payload?.data?.payment_id || "";
+      const looksPaid =
+        eventType === "checkout.success" ||
+        eventType === "payment.succeeded" ||
+        (eventType === "checkout.status" && payload?.data?.status === "succeeded");
+      if (!looksPaid || !paymentId) return;
+      setState("processing");
+      void verifyUnlock({ payment_id: paymentId }).then((verdict) => {
+        if (!verdict.valid) {
+          setState("idle");
+          setError("We couldn't confirm that payment yet. Use \"Already purchased?\" with the payment ID from your receipt.");
+          return;
         }
-      }
+        try {
+          localStorage.setItem("lovelens_unlocked_v1", "true");
+          localStorage.setItem("lovelens_license", paymentId);
+        } catch {
+          /* ignore */
+        }
+        finishUnlock();
+      });
     };
 
     const handleStorage = (e: StorageEvent) => {
@@ -104,6 +116,9 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹2
 
   const openCheckout = () => {
     if (activeCheckoutUrl) {
+      // Funnel: checkout started (GA4's recommended event), and keep the price for the purchase event on return
+      track("begin_checkout", priceToValue(price));
+      rememberCheckoutPrice(price);
       // Build a redirect URL so Dodo sends the user back after payment
       const redirectUrl = window.location.origin + window.location.pathname + "?status=succeeded";
       const separator = activeCheckoutUrl.includes("?") ? "&" : "?";
@@ -131,50 +146,44 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹2
     setError(null);
     const key = licenseKey.trim();
     if (!key) {
-      setError("Please paste your checkout ID or transaction reference.");
+      setError("Paste the payment ID from your receipt email (it starts with pay_).");
       return;
     }
     setState("processing");
-
-    // Standard client-side bypass check for offline purchase recovery or testing
-    const bypassCode = process.env.NEXT_PUBLIC_DODO_BYPASS_CODE || "lovelens_vip";
-    const keyLower = key.toLowerCase();
-    if (
-      keyLower === bypassCode.toLowerCase() ||
-      keyLower.startsWith("cks_") ||
-      keyLower.startsWith("pay_") ||
-      keyLower.startsWith("pdt_") ||
-      keyLower.startsWith("dis_") ||
-      keyLower.startsWith("ref_") ||
-      keyLower.startsWith("sub_")
-    ) {
-      setTimeout(() => {
-        try {
-          localStorage.setItem("lovelens_unlocked_v1", "true");
-          localStorage.setItem("lovelens_license", key);
-        } catch {
-          /* ignore */
-        }
-        finishUnlock();
-      }, 1000);
+    const isPayment = /^pay_/i.test(key);
+    // Checked on the server: a payment with Dodo, or a VIP code kept only on the server. Nothing to guess here.
+    const verdict = await verifyUnlock(isPayment ? { payment_id: key } : { code: key });
+    if (verdict.valid) {
+      try {
+        localStorage.setItem("lovelens_unlocked_v1", "true");
+        localStorage.setItem("lovelens_license", key);
+      } catch {
+        /* ignore */
+      }
+      track("unlock_restored", { kind: isPayment ? "payment" : "code" });
+      finishUnlock();
+      return;
+    }
+    setState("idle");
+    if (verdict.configured === false) {
+      setError("We can't check payments right now. Email hello@getlovelens.com with your receipt and we'll unlock it for you.");
+    } else if (isPayment) {
+      setError("We couldn't find a completed LoveLens payment with that ID. Check the payment ID in your receipt email.");
     } else {
-      setTimeout(() => {
-        setState("idle");
-        setError("That reference doesn't appear to be a valid Dodo checkout session.");
-      }, 1000);
+      setError("That code isn't valid.");
     }
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden bg-[#20090f]/55 backdrop-blur-sm">
       <div className="min-h-full flex items-center justify-center p-3 sm:p-4">
-        <div className="relative w-full max-w-[min(420px,calc(100vw-1.5rem))] overflow-hidden rounded-3xl bg-white shadow-2xl my-auto">
+        <div className="relative w-full max-w-[min(420px,calc(100vw-1.5rem))] overflow-hidden rounded-[28px] bg-white shadow-[0_40px_80px_-30px_rgba(32,9,15,0.55)] my-auto">
 
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-rose-100/50 bg-rose-50/30 px-5 sm:px-6 py-4">
+          <div className="flex items-center justify-between border-b border-[rgba(32,9,15,0.06)] px-5 sm:px-6 py-3.5">
             <div className="flex items-center gap-1.5">
               <img src="/lovelens_logo.png" alt="LoveLens Logo" className="h-5 w-5 object-contain rounded" />
-              <h3 className="text-sm font-black tracking-tight text-slate-800 uppercase">Unlock Premium</h3>
+              <h3 className="text-sm font-semibold tracking-tight text-[#20090f]">LoveLens</h3>
             </div>
             {state === "idle" && (
               <button
@@ -220,30 +229,41 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹2
           {state === "idle" && (
             <div className="p-5 sm:p-6 space-y-5">
               {/* Value proposition */}
-              <div className="text-center bg-gradient-to-r from-rose-50 to-indigo-50 border border-rose-100/30 p-4 rounded-2xl">
-                <span className="text-[9px] font-black tracking-widest text-rose-500 uppercase block mb-1">Premium Upgrade</span>
-                <h4 className="text-base font-black text-slate-800">Find out who&apos;s more into who 💘</h4>
-                <p className="text-[11px] font-medium text-slate-500 mt-1 leading-normal">
-                  Unlock the Interest Balance verdict, who said &quot;I love you&quot; first, who chases more, the longest silence,
-                  flag audits + a shareable card. One payment, lifetime access on this device.
-                </p>
-                <div className="mt-3 flex items-center justify-center gap-1.5">
-                  <span className="text-xs text-slate-400 line-through font-semibold">{price.includes("$") ? "$9.99" : "₹499"}</span>
-                  <span className="text-lg font-black text-rose-500">{price}</span>
-                  <span className="text-[10px] font-extrabold bg-rose-500 text-white px-2 py-0.5 rounded-full">Save 50%</span>
-                </div>
+              <div className="text-center">
+                <span className="eyebrow"><Sparkles size={12} className="text-[#e11d48]" /> Full report</span>
+                <h4 className="font-display mt-3 text-[30px] leading-[1.05] text-[#20090f]">Find out who&apos;s more into who</h4>
+                <p className="mt-2 text-sm text-[#6b4a56]">Everything in your chat, decoded. Unlocks on this device instantly.</p>
+              </div>
+              <ul className="space-y-2.5 rounded-2xl border border-[rgba(32,9,15,0.08)] bg-[#fdf7f5] p-4 text-left">
+                {[
+                  "The verdict: who's more invested, and by how much",
+                  "Who said \"I love you\" first",
+                  "Who chases more: double texts and longest silence",
+                  "Red & green flags audit",
+                  "Your honeymoon timeline and inside jokes",
+                  "A shareable love card",
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-2.5 text-[13px] font-medium text-[#20090f]">
+                    <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-[#e11d48] text-white"><Check size={10} strokeWidth={3} /></span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-end justify-center gap-2">
+                <span className="font-display text-[44px] leading-none text-[#20090f]">{price}</span>
+                <span className="pb-1.5 text-xs font-semibold text-[#6b4a56]">one-time · no subscription</span>
               </div>
 
               {configured ? (
                 <>
                   <button
                     onClick={openCheckout}
-                    className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 to-rose-400 hover:opacity-95 py-4 px-4 font-black text-sm text-white shadow-lg shadow-rose-200 active:scale-[0.98] transition-all cursor-pointer"
+                    className="premium-btn-rose w-full flex items-center justify-center gap-2 rounded-2xl py-4 px-4 text-[15px] font-semibold cursor-pointer"
                   >
-                    <Lock size={16} /> Pay {price} {"&"} unlock instantly
+                    <Lock size={16} /> Unlock my full report
                   </button>
-                  <p className="text-[11px] text-slate-400 font-medium text-center leading-relaxed">
-                    You'll be redirected to a secure checkout. After payment you'll return here automatically with your report unlocked.
+                  <p className="text-[11px] text-[#a78e97] font-medium text-center leading-relaxed">
+                    Secure checkout, then you come straight back here with your report unlocked.
                   </p>
 
                   {/* Fallback for people who paid elsewhere / on another device */}
@@ -252,7 +272,7 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹2
                       onClick={() => setShowKeyEntry(true)}
                       className="w-full text-center text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors underline"
                     >
-                      Already purchased? Restore access reference
+                      Already purchased? Restore with your payment ID
                     </button>
                   ) : (
                     <form onSubmit={handleValidate} className="pt-1">
@@ -261,7 +281,7 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹2
                           type="text"
                           value={licenseKey}
                           onChange={(e) => setLicenseKey(e.target.value)}
-                          placeholder="Paste checkout ID or reference"
+                          placeholder="Payment ID (pay_…) or access code"
                           className="w-full rounded-xl border border-slate-200 pl-10 pr-4 py-3 text-base font-semibold focus:border-rose-400 focus:outline-none transition-all placeholder:text-slate-300"
                         />
                         <KeyRound size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -297,11 +317,9 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹2
               )}
 
               {/* Security stamp */}
-              <div className="flex items-center justify-center gap-2 border-t border-slate-100 pt-4 text-center">
-                <ShieldCheck size={16} className="text-green-500" />
-                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">
-                  Secured by Dodo Payments · taxes included
-                </span>
+              <div className="space-y-1.5 border-t border-[rgba(32,9,15,0.07)] pt-4 text-center text-[11px] font-medium text-[#6b4a56]">
+                <p className="flex items-center justify-center gap-1.5"><ShieldCheck size={14} className="text-emerald-600" /> Secure checkout by Dodo Payments · taxes included</p>
+                <p className="flex items-center justify-center gap-1.5"><Lock size={12} className="text-[#e11d48]" /> Your chat never leaves your device</p>
               </div>
             </div>
           )}

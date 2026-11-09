@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,11 +13,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const displaySerif = Instrument_Serif({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: "400",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://getlovelens.com"),
-  title: "LoveLens — WhatsApp Chat Analyzer & Relationship Stats",
+  title: "LoveLens — Who's more into who? Your WhatsApp chat knows",
   description:
-    "Upload your WhatsApp chat and instantly see who texts more, who replies faster, who said 'I love you' first, and who's more into who. A beautiful, shareable, 100% private relationship report parsed entirely in your browser.",
+    "Upload your WhatsApp chat and get a beautiful, private relationship report — who texts more, who replies faster, who's more into who. Parsed 100% in your browser. No sign-up.",
   keywords: [
     "whatsapp chat analyzer",
     "relationship stats",
@@ -55,9 +61,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${displaySerif.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col bg-[#fdf7f5] text-[#20090f]">
         {children}
         {/* Google Analytics */}
         <Script
