@@ -22,6 +22,7 @@ import dynamic from "next/dynamic";
 // Load on demand: PaywallModal only when unlocking, ShareCard (html-to-image) only when sharing.
 const PaywallModal = dynamic(() => import("./PaywallModal"), { ssr: false });
 const ShareCard = dynamic(() => import("./ShareCard"), { ssr: false });
+const ChatWrapped = dynamic(() => import("./ChatWrapped"), { ssr: false });
 
 interface DashboardProps {
   stats: ChatStats;
@@ -41,6 +42,8 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
   const [exitToastVisible, setExitToastVisible] = useState(false);
   const [exitToastDismissed, setExitToastDismissed] = useState(false);
   const premiumGalleryRef = React.useRef<HTMLDivElement>(null);
+  const [storyOpen, setStoryOpen] = useState(false);
+  const [storyAtFinale, setStoryAtFinale] = useState(false);
 
   const {
     participants, totalMessages, messageCounts, wordCounts,
@@ -134,6 +137,25 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
     } catch {
       /* ignore */
     }
+  }, []);
+
+  // Chat Wrapped: open the story the first time this report is seen in this tab; straight to the reveal after paying
+  useEffect(() => {
+    try {
+      const key = `lovelens_wrapped_seen_${participants.join("_")}_${totalMessages}`;
+      if (sessionStorage.getItem("lovelens_reveal_now") === "1") {
+        sessionStorage.removeItem("lovelens_reveal_now");
+        setStoryAtFinale(true);
+        setStoryOpen(true);
+      } else if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, "1");
+        setStoryAtFinale(false);
+        setStoryOpen(true);
+      }
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Trigger confetti on mount
@@ -263,6 +285,11 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
       spread: 90,
       origin: { y: 0.5 }
     });
+    // the payoff: replay the finale, now landing on the winner
+    setTimeout(() => {
+      setStoryAtFinale(true);
+      setStoryOpen(true);
+    }, 600);
   };
 
   // Dev-only helper to clear the persisted unlock so the locked flow can be re-tested.
@@ -275,6 +302,18 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
       /* ignore */
     }
   };
+
+  // Chat Wrapped data: the peak hour across both, the most used emoji across both
+  const peakHour = (() => {
+    const sums = Array.from({ length: 24 }, (_, h) => (hourlyActivity[p1]?.[h] || 0) + (hourlyActivity[p2]?.[h] || 0));
+    return sums.indexOf(Math.max(...sums));
+  })();
+  const topEmoji = (() => {
+    const tally: Record<string, number> = {};
+    for (const who of [p1, p2]) for (const e of topEmojis[who] || []) tally[e.emoji] = (tally[e.emoji] || 0) + e.count;
+    const best = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
+    return best ? { emoji: best[0], count: best[1] } : null;
+  })();
 
   // Every unlock button goes through here, so the analytics show which one sells
   const openPaywall = (source: string) => {
@@ -369,9 +408,9 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
   };
 
   return (
-    <div className="relative min-h-screen pb-28 pt-5 overflow-x-hidden bg-[#fdf7f5] text-[#20090f]">
+    <div className="relative min-h-screen pb-28 pt-5 overflow-x-hidden confetti-bg text-[#20090f]">
       <div className="screen-only">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(55%_45%_at_50%_0%,rgba(251,77,109,0.14),transparent_70%)]" />
+        
 
       <div className="relative mx-auto w-full max-w-4xl px-4">
         {/* Header */}
@@ -388,6 +427,17 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
             <span className="text-[15px] font-semibold tracking-tight hidden sm:block">LoveLens</span>
           </button>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => {
+                track("wrapped_replay");
+                setStoryAtFinale(false);
+                setStoryOpen(true);
+              }}
+              className="pop-btn flex items-center justify-center gap-1 rounded-full bg-[#ffd23f] px-3.5 py-2 text-xs font-extrabold text-[#20090f]"
+              aria-label="Replay your Chat Wrapped"
+            >
+              ▶ <span>Wrapped</span>
+            </button>
             <a
               href={`https://wa.me/?text=${encodeURIComponent("I just checked our chat on LoveLens 👀 Who's more into who? Check yours (it's private, works in your browser): https://getlovelens.com")}`}
               target="_blank"
@@ -421,9 +471,11 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
 
         {/* Hero: who, and how much we read */}
         <motion.div className="mb-6 text-center" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0}>
-          <span className="eyebrow"><Sparkles size={12} className="text-[#e11d48]" /> Your chat, decoded</span>
-          <h2 className="font-display mt-4 px-2 text-[42px] leading-[1.04] md:text-[64px] break-words">
-            {p1} <span className="italic text-[#e11d48]">&amp;</span> {p2}
+          <span className="pop-btn inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-extrabold">💌 Your chat, decoded</span>
+          <h2 className="font-fun relative mt-5 px-2 text-[44px] font-extrabold leading-[1.02] md:text-[68px] break-words">
+            <span className="absolute -left-1 -top-6 text-3xl wiggle md:left-6">💘</span>
+            {p1} <span className="text-[#ff2e7e]">&amp;</span> {p2}
+            <span className="absolute -right-1 -top-4 text-3xl bob md:right-6">✨</span>
           </h2>
           <p className="mt-3 text-sm text-[#6b4a56]">
             {totalMessages.toLocaleString()} messages · talking since {relationshipStartDate} · {daysTogether.toLocaleString()} days
@@ -433,30 +485,35 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
         {/* Free facts: proof the analysis is real */}
         <motion.div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0.15}>
           {[
-            { k: "Sends more texts", v: count1 >= count2 ? p1 : p2, s: `${Math.max(pct1, pct2)}% of all messages` },
+            { e: "📱", bg: "bg-[#ffe1ec]", k: "Sends more texts", v: count1 >= count2 ? p1 : p2, s: `${Math.max(pct1, pct2)}% of all messages` },
             {
+              e: "⚡",
+              bg: "bg-[#dff3ff]",
               k: "Replies faster",
               v: (avgResponseTimes[p1] || Infinity) <= (avgResponseTimes[p2] || Infinity) ? p1 : p2,
               s: `in ${formatReplySpeed(Math.min(avgResponseTimes[p1] || Infinity, avgResponseTimes[p2] || Infinity))} on average`,
             },
-            { k: "Longest streak", v: `${longestStreak} days`, s: currentStreak > 0 ? `${currentStreak} days and counting 🔥` : "without missing a day" },
+            { e: "🔥", bg: "bg-[#ffe9d6]", k: "Longest streak", v: `${longestStreak} days`, s: currentStreak > 0 ? `${currentStreak} days and counting 🔥` : "without missing a day" },
             {
+              e: "💞",
+              bg: "bg-[#efe6ff]",
               k: "Chemistry",
               v: `${relationshipScore}%`,
               s: relationshipScore >= 90 ? "Exceptional" : relationshipScore >= 75 ? "Strong chemistry" : "Work in progress",
             },
           ].map((f) => (
-            <div key={f.k} className="premium-card rounded-2xl p-4">
-              <span className="block text-xs text-[#a78e97]">{f.k}</span>
-              <span className="mt-1 block truncate text-lg font-semibold">{f.v}</span>
-              <span className="mt-0.5 block text-xs text-[#6b4a56]">{f.s}</span>
+            <div key={f.k} className={`pop-card ${f.bg} p-4`}>
+              <span className="text-2xl">{f.e}</span>
+              <span className="mt-1 block text-xs font-bold text-[#6b4a56]">{f.k}</span>
+              <span className="font-fun mt-0.5 block truncate text-2xl font-extrabold">{f.v}</span>
+              <span className="mt-0.5 block text-xs font-semibold text-[#6b4a56]">{f.s}</span>
             </div>
           ))}
         </motion.div>
 
         {/* FLAGSHIP: who's more into who */}
         <motion.div
-          className="mb-6 relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#fb4d6d] via-[#e11d48] to-[#6d28d9] p-6 md:p-9 text-white shadow-[0_40px_80px_-40px_rgba(225,29,72,0.7)]"
+          className="mb-6 relative overflow-hidden rounded-[32px] border-2 border-[#20090f] bg-gradient-to-br from-[#ff2e7e] via-[#e11d48] to-[#7c3aed] p-6 md:p-9 text-white shadow-[6px_6px_0_#20090f]"
           variants={revealVariants}
           initial="hidden"
           animate={revealReady ? "visible" : "hidden"}
@@ -470,7 +527,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                 {isUnlocked ? <><Sparkles size={11} /> Revealed</> : <><Lock size={11} /> Ready to reveal</>}
               </span>
             </div>
-            <h3 className="font-display mt-5 text-center text-[40px] leading-[1.04] md:text-6xl">Who&apos;s more into who?</h3>
+            <h3 className="font-fun mt-5 text-center text-[42px] font-extrabold leading-[1.02] md:text-6xl">Who&apos;s more into who? 👀</h3>
 
             <div className="mt-7 flex items-start justify-center gap-4 md:gap-12">
               {[
@@ -486,9 +543,9 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                     </div>
                     <span className="max-w-full truncate text-sm font-semibold">{person.name}</span>
                     {isUnlocked ? (
-                      <span className="font-display text-3xl">{person.pct}%</span>
+                      <span className="font-fun text-4xl font-extrabold">{person.pct}%</span>
                     ) : (
-                      <span className="select-none font-display text-3xl text-white/60 blur-[6px]">88%</span>
+                      <span className="select-none font-fun text-4xl font-extrabold text-white/60 blur-[6px]">88%</span>
                     )}
                   </div>
                 </React.Fragment>
@@ -537,9 +594,9 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                 </div>
                 <button
                   onClick={() => openPaywall("verdict_card")}
-                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-[15px] font-semibold text-[#be123c] shadow-lg transition-transform hover:scale-[1.01] active:scale-[0.99]"
+                  className="pop-btn mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ffd23f] px-6 py-4 text-base font-extrabold text-[#20090f]"
                 >
-                  <Lock size={15} /> Reveal who · {price}
+                  🔓 Reveal who · {price}
                 </button>
                 <p className="mt-2.5 text-center text-xs text-white/75">
                   Already calculated from your {totalMessages.toLocaleString()} messages · one-time · no subscription
@@ -553,7 +610,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
         <motion.div ref={premiumGalleryRef} className="mb-6" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0.45}>
           <div className="mb-3 flex items-end justify-between gap-3">
             <div>
-              <h3 className="font-display text-3xl">{isUnlocked ? "Your highlights" : "What else your chat says"}</h3>
+              <h3 className="font-fun text-3xl font-extrabold">{isUnlocked ? "Your highlights ✨" : "What else your chat says 🤭"}</h3>
               <p className="mt-0.5 text-sm text-[#6b4a56]">{isUnlocked ? "The best bits of your full report." : "Real numbers from your chat. Tap any to see who."}</p>
             </div>
           </div>
@@ -570,7 +627,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
               <button
                 key={idx}
                 onClick={() => !isUnlocked && openPaywall("insight_card")}
-                className={`premium-card rounded-3xl p-4 text-left transition-transform ${isUnlocked ? "cursor-default" : "hover:-translate-y-0.5"}`}
+                className={`pop-card p-4 text-left ${["bg-white", "bg-[#fff6cc]", "bg-[#e6f7ef]", "bg-[#ffe1ec]", "bg-[#dff3ff]", "bg-[#efe6ff]"][idx % 6]} ${isUnlocked ? "cursor-default" : ""}`}
               >
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-2xl">{item.icon}</span>
@@ -597,9 +654,9 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
 
         {/* The full report is ready (locked only) */}
         {!isUnlocked && (
-          <motion.div className="mb-6 rounded-[28px] bg-[#20090f] p-6 text-white md:p-8" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0.55}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Your full report is ready</p>
-            <h3 className="font-display mt-2 text-[32px] leading-[1.08] md:text-4xl">It&apos;s already calculated. It&apos;s just locked.</h3>
+          <motion.div className="pop-card mb-6 rounded-[28px] bg-[#ffd23f] p-6 text-[#20090f] md:p-8" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0.55}>
+            <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-[#20090f]/70">🎁 Your full report is ready</p>
+            <h3 className="font-fun mt-2 text-[32px] font-extrabold leading-[1.05] md:text-4xl">It&apos;s already calculated. It&apos;s just locked. 🔒</h3>
             <ul className="mt-5 grid grid-cols-1 gap-2.5 text-[14px] sm:grid-cols-2">
               {[
                 "Who's more into who, and by how much",
@@ -611,13 +668,13 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                 "Good mornings, goodnights and habit quirks",
                 "The verdict on your share card, plus a PDF",
               ].map((x) => (
-                <li key={x} className="flex items-start gap-2.5"><Check size={16} className="mt-0.5 flex-shrink-0 text-[#fb7185]" /> {x}</li>
+                <li key={x} className="flex items-start gap-2.5 font-semibold"><span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#20090f] text-white"><Check size={12} strokeWidth={3} /></span> {x}</li>
               ))}
             </ul>
-            <button onClick={() => openPaywall("report_ready")} className="premium-btn-rose mt-6 w-full rounded-2xl py-4 text-[15px] font-semibold">
+            <button onClick={() => openPaywall("report_ready")} className="pop-btn mt-6 w-full rounded-2xl bg-[#ff2e7e] py-4 text-base font-extrabold text-white">
               Unlock my full report · {price}
             </button>
-            <p className="mt-2.5 text-center text-xs text-white/55">One-time payment · secure checkout by Dodo Payments · your chat never leaves your device</p>
+            <p className="mt-2.5 text-center text-xs font-semibold text-[#20090f]/65">One-time payment · secure checkout by Dodo Payments · your chat never leaves your device</p>
           </motion.div>
         )}
 
@@ -630,16 +687,16 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
             { label: "Current streak", value: currentStreak > 0 ? `${currentStreak} days 🔥` : "—" },
             { label: "Busiest day", value: `${mostActiveDay.count} texts` },
           ].map((x) => (
-            <div key={x.label} className="rounded-2xl border border-[rgba(32,9,15,0.07)] bg-white px-4 py-3">
-              <span className="block text-xs text-[#a78e97]">{x.label}</span>
-              <span className="mt-0.5 block truncate text-[15px] font-semibold">{x.value}</span>
+            <div key={x.label} className="pop-card bg-white px-4 py-3">
+              <span className="block text-xs font-bold text-[#6b4a56]">{x.label}</span>
+              <span className="font-fun mt-0.5 block truncate text-lg font-extrabold">{x.value}</span>
             </div>
           ))}
         </motion.div>
 
         {/* Tabs */}
         <motion.div
-          className="mb-6 flex gap-1 overflow-x-auto rounded-2xl border border-[rgba(32,9,15,0.07)] bg-white p-1 scrollbar-none snap-x"
+          className="pop-card mb-6 flex gap-1 overflow-x-auto bg-white p-1.5 scrollbar-none snap-x"
           variants={revealVariants}
           initial="hidden"
           animate={revealReady ? "visible" : "hidden"}
@@ -661,7 +718,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex flex-shrink-0 snap-start items-center justify-center gap-1 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors md:flex-1 ${
-                activeTab === tab.id ? "bg-[#20090f] text-white" : "text-[#6b4a56] hover:text-[#20090f]"
+                activeTab === tab.id ? "bg-[#ff2e7e] text-white" : "text-[#6b4a56] hover:text-[#20090f]"
               }`}
             >
               {tab.label}
@@ -683,7 +740,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
           {activeTab === "overview" && (
             <div className="space-y-6">
               {/* Who Texts More */}
-              <div className="premium-card rounded-3xl p-6">
+              <div className="pop-card bg-white p-6">
                 <h3 className="text-xs font-bold text-[#20090f] mb-4 flex items-center gap-2">
                   <MessageCircle className="text-rose-500" size={16} /> Who Texts More?
                 </h3>
@@ -718,7 +775,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
               {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Free Box: Avg reply time */}
-                <div className="premium-card rounded-3xl p-6">
+                <div className="pop-card bg-white p-6">
                   <h4 className="text-xs font-bold text-[#6b4a56] mb-4 flex items-center gap-1.5">
                     <Reply className="text-rose-500" size={14} /> Average Reply Speed
                   </h4>
@@ -777,7 +834,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
               </div>
 
               {/* Effort breakdown */}
-              <div className="premium-card rounded-3xl p-6">
+              <div className="pop-card bg-white p-6">
                 <h4 className="text-xs font-bold text-[#6b4a56] mb-4 flex items-center gap-1.5">
                   <Activity className="text-rose-500" size={14} /> Effort Signals — Who Leads Each
                 </h4>
@@ -990,7 +1047,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   </div>
 
                   {/* Spark Shift card */}
-                  <div className="premium-card rounded-3xl p-6 flex flex-col justify-between h-44">
+                  <div className="pop-card bg-white p-6 flex flex-col justify-between h-44">
                     <div>
                       <span className="text-[10px] font-bold text-[#a78e97] block mb-2">Spark Shift (Early vs Recent) ⚡</span>
                       <div className="flex justify-between items-center text-sm font-semibold mb-2">
@@ -1036,7 +1093,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Pet Names counts */}
-                  <div className="premium-card rounded-3xl p-6">
+                  <div className="pop-card bg-white p-6">
                     <span className="text-[10px] font-bold text-[#a78e97] block mb-3">Pet Names Used 💖</span>
                     <div className="flex justify-between items-center text-sm font-semibold mb-2">
                       <span className="text-[#6b4a56] truncate max-w-[120px]">{p1}</span>
@@ -1056,7 +1113,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   </div>
 
                   {/* Apology counts */}
-                  <div className="premium-card rounded-3xl p-6">
+                  <div className="pop-card bg-white p-6">
                     <span className="text-[10px] font-bold text-[#a78e97] block mb-3">The Peacekeeper Meter (Apologies) 🙏</span>
                     <div className="flex justify-between items-center text-sm font-semibold mb-2">
                       <span className="text-[#6b4a56] truncate max-w-[120px]">{p1}</span>
@@ -1089,7 +1146,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   </div>
 
                   {/* Curiosity count */}
-                  <div className="premium-card rounded-3xl p-6 flex flex-col justify-between h-40">
+                  <div className="pop-card bg-white p-6 flex flex-col justify-between h-40">
                     <div>
                       <span className="text-[10px] font-bold text-[#a78e97] block mb-2">Curiosity Index (Questions Asked) ❓</span>
                       <div className="flex justify-between items-center text-sm font-semibold mb-2 mt-2">
@@ -1122,7 +1179,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Greetings */}
-                  <div className="premium-card rounded-3xl p-6 space-y-4">
+                  <div className="pop-card bg-white p-6 space-y-4">
                     <h4 className="text-xs font-bold text-[#6b4a56] border-b border-slate-100 pb-2">
                       ☀️ Morning vs 🌙 Night Greetings
                     </h4>
@@ -1143,7 +1200,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   </div>
 
                   {/* Desperation */}
-                  <div className="premium-card rounded-3xl p-6 space-y-4">
+                  <div className="pop-card bg-white p-6 space-y-4">
                     <h4 className="text-xs font-bold text-[#6b4a56] border-b border-slate-100 pb-2">
                       🤡 Spam Desperation Meter
                     </h4>
@@ -1159,7 +1216,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   </div>
 
                   {/* Vocabulary size */}
-                  <div className="premium-card rounded-3xl p-6 space-y-4">
+                  <div className="pop-card bg-white p-6 space-y-4">
                     <h4 className="text-xs font-bold text-[#6b4a56] border-b border-slate-100 pb-2">
                       🗣️ Vocabulary Size (Unique Words)
                     </h4>
@@ -1180,7 +1237,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   </div>
 
                   {/* Media counts */}
-                  <div className="premium-card rounded-3xl p-6 space-y-4">
+                  <div className="pop-card bg-white p-6 space-y-4">
                     <h4 className="text-xs font-bold text-[#6b4a56] border-b border-slate-100 pb-2">
                       🎙️ Media & Voice Notes Count
                     </h4>
@@ -1207,7 +1264,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
           {/* TAB 6: EMOJI BATTLE */}
           {activeTab === "emojis" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="premium-card rounded-3xl p-6">
+              <div className="pop-card bg-white p-6">
                 <h3 className="text-sm font-bold text-rose-500 mb-4 border-b border-rose-100/50 pb-2">{p1}'s Top Emojis</h3>
                 {topEmojis[p1] && topEmojis[p1].length > 0 ? (
                   <div className="space-y-3">
@@ -1226,7 +1283,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                 )}
               </div>
 
-              <div className="premium-card rounded-3xl p-6">
+              <div className="pop-card bg-white p-6">
                 <h3 className="text-sm font-bold text-indigo-500 mb-4 border-b border-indigo-100/50 pb-2">{p2}'s Top Emojis</h3>
                 {topEmojis[p2] && topEmojis[p2].length > 0 ? (
                   <div className="space-y-3">
@@ -1250,7 +1307,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
           {/* TAB 7: ACTIVITY RHYTHM */}
           {activeTab === "activity" && (
             <div className="space-y-6">
-              <div className="premium-card rounded-3xl p-6">
+              <div className="pop-card bg-white p-6">
                 <h3 className="text-sm font-bold text-[#20090f] mb-4 flex items-center gap-2">
                   <BarChart2 className="text-rose-500" size={16} /> Daily Texting Rhythm
                 </h3>
@@ -1278,7 +1335,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                 </div>
               </div>
 
-              <div className="premium-card rounded-3xl p-6">
+              <div className="pop-card bg-white p-6">
                 <h3 className="text-sm font-bold text-[#20090f] mb-4 flex items-center gap-2">
                   <Calendar className="text-rose-500" size={16} /> Active Days of the Week
                 </h3>
@@ -1305,12 +1362,12 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
       {/* Sticky unlock bar: always there while locked */}
       {!isUnlocked && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 p-3 sm:p-4">
-          <div className="pointer-events-auto mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl bg-[#20090f] px-4 py-3 text-white shadow-[0_20px_50px_-20px_rgba(32,9,15,0.8)]">
+          <div className="pop-card pointer-events-auto mx-auto flex max-w-xl items-center justify-between gap-3 bg-[#ff2e7e] px-4 py-3 text-white">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{isBalanced ? "Who edges ahead? 👀" : `Who's putting in ${effortLeaderPct}%? 👀`}</p>
-              <p className="truncate text-xs text-white/60">The verdict + your full report · one-time</p>
+              <p className="truncate text-xs font-semibold text-white/85">The verdict + your full report · one-time</p>
             </div>
-            <button onClick={() => openPaywall("sticky_bar")} className="premium-btn-rose whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold">
+            <button onClick={() => openPaywall("sticky_bar")} className="pop-btn whitespace-nowrap rounded-xl bg-[#ffd23f] px-4 py-2.5 text-sm font-extrabold text-[#20090f]">
               Reveal · {price}
             </button>
           </div>
@@ -1336,7 +1393,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
             transition={{ type: "spring", damping: 20, stiffness: 300 }}
             className="fixed bottom-20 sm:bottom-24 right-4 sm:right-6 z-50 max-w-[300px] w-full"
           >
-            <div className="premium-card relative rounded-2xl p-4">
+            <div className="pop-card relative bg-white p-4">
               <button
                 onClick={() => { setExitToastVisible(false); setExitToastDismissed(true); }}
                 className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-[#a78e97] hover:bg-[#fff1f3] hover:text-[#e11d48]"
@@ -1348,7 +1405,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
               <p className="mt-1 text-xs leading-snug text-[#6b4a56]">It&apos;s already worked out from your chat. One tap to see who&apos;s more invested.</p>
               <button
                 onClick={() => { setExitToastVisible(false); setExitToastDismissed(true); openPaywall("exit_nudge"); }}
-                className="premium-btn-rose mt-3 rounded-xl px-4 py-2 text-xs font-semibold"
+                className="pop-btn mt-3 rounded-xl bg-[#ffd23f] px-4 py-2 text-xs font-extrabold text-[#20090f]"
               >
                 Reveal now · {price}
               </button>
@@ -1664,6 +1721,41 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
         price={price}
         checkoutUrl={checkoutUrl}
       />
+
+      {storyOpen && (
+        <ChatWrapped
+          data={{
+            p1,
+            p2,
+            totalMessages,
+            count1,
+            count2,
+            pct1,
+            pct2,
+            reply1: avgResponseTimes[p1] || 0,
+            reply2: avgResponseTimes[p2] || 0,
+            longestStreak,
+            peakHour,
+            topEmoji,
+            score: relationshipScore,
+            effortLeader,
+            effortLeaderPct,
+            isBalanced,
+            p1Effort,
+            p2Effort,
+            verdict: interestBalance?.verdict || "",
+          }}
+          isUnlocked={isUnlocked}
+          price={price}
+          startAtFinale={storyAtFinale}
+          onUnlock={() => openPaywall("wrapped_finale")}
+          onClose={() => {
+            track("wrapped_close");
+            setStoryOpen(false);
+          }}
+          onSlide={(i, id) => track("wrapped_slide", { index: i, slide: id })}
+        />
+      )}
 
       <ShareCard
         isOpen={isShareOpen}

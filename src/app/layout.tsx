@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
+import { Geist, Geist_Mono, Instrument_Serif, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -11,6 +11,12 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+});
+
+const funDisplay = Bricolage_Grotesque({
+  variable: "--font-fun",
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
 });
 
 const displaySerif = Instrument_Serif({
@@ -61,7 +67,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${displaySerif.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${displaySerif.variable} ${funDisplay.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#fdf7f5] text-[#20090f]">
         {children}

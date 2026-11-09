@@ -278,3 +278,50 @@ body {
     letter-spacing: 0.02em !important;
   }
 }
+
+/* ---------- playful report (Chat Wrapped + results) ---------- */
+.font-fun {
+  font-family: var(--font-fun), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.03em;
+}
+.pop-card {
+  border: 2px solid #20090f;
+  box-shadow: 4px 4px 0 #20090f;
+  border-radius: 22px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.pop-card:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 #20090f;
+}
+.pop-btn {
+  border: 2px solid #20090f;
+  box-shadow: 3px 3px 0 #20090f;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.pop-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 #20090f;
+}
+.pop-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 #20090f;
+}
+.confetti-bg {
+  background-color: #fff8f3;
+  background-image:
+    radial-gradient(circle at 12px 12px, rgba(255, 46, 126, 0.16) 2.5px, transparent 3px),
+    radial-gradient(circle at 36px 30px, rgba(124, 58, 237, 0.14) 2.5px, transparent 3px),
+    radial-gradient(circle at 24px 44px, rgba(250, 204, 21, 0.22) 2.5px, transparent 3px);
+  background-size: 48px 52px;
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(4deg); }
+}
+.wiggle { animation: wiggle 1.6s ease-in-out infinite; }
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.bob { animation: bob 2.4s ease-in-out infinite; }

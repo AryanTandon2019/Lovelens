@@ -104,6 +104,7 @@ export default function Home() {
           localStorage.setItem("lovelens_unlocked_v1", "true");
           localStorage.setItem("lovelens_license", paymentId);
           trackPurchaseOnce(paymentId, "$4.99");
+          sessionStorage.setItem("lovelens_reveal_now", "1");
           const saved = localStorage.getItem(SAVED_KEY);
           if (saved) setStats(JSON.parse(saved));
         } else {
