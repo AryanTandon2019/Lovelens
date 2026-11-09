@@ -8,7 +8,7 @@ import {
   MessageCircle, Reply, Share2, ArrowLeft, Clock, ShieldCheck, 
   Lock, Sparkles, Moon, Sun, AlertTriangle, ShieldAlert,
   Smile, Frown, Users, Activity, HelpCircle, FileText, ChevronRight, BarChart2,
-  TrendingUp, BookOpen, SmilePlus
+  TrendingUp, BookOpen, SmilePlus, Check
 } from "lucide-react";
 import { track } from "../lib/analytics";
 import { 
@@ -276,6 +276,12 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
     }
   };
 
+  // Every unlock button goes through here, so the analytics show which one sells
+  const openPaywall = (source: string) => {
+    track("paywall_cta", { source });
+    setIsPaywallOpen(true);
+  };
+
   // Curiosity Blur Wrapper
   const renderTeasedValue = (value: React.ReactNode, placeholder: string) => {
     if (isUnlocked) {
@@ -285,7 +291,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
       <span 
         onClick={(e) => {
           e.stopPropagation();
-          setIsPaywallOpen(true);
+          openPaywall("teased_value");
         }}
         className="relative group cursor-pointer inline-flex items-center gap-1"
       >
@@ -363,38 +369,31 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
   };
 
   return (
-    <div className="relative min-h-screen pb-28 pt-6 overflow-x-hidden">
+    <div className="relative min-h-screen pb-28 pt-5 overflow-x-hidden bg-[#fdf7f5] text-[#20090f]">
       <div className="screen-only">
-        {/* Visual background decorations */}
-        <div className="absolute top-[10%] left-[-100px] w-[350px] h-[350px] bg-rose-200/25 rounded-full blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-[20%] right-[-100px] w-[350px] h-[350px] bg-indigo-200/25 rounded-full blur-[120px] pointer-events-none" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[560px] bg-[radial-gradient(55%_45%_at_50%_0%,rgba(251,77,109,0.14),transparent_70%)]" />
 
-      <div className="mx-auto w-full max-w-4xl px-4">
-        {/* Top Header Navigation — single compact row on mobile */}
-        <div className="mb-6 md:mb-8 flex items-center justify-between gap-2">
+      <div className="relative mx-auto w-full max-w-4xl px-4">
+        {/* Header */}
+        <div className="mb-7 flex items-center justify-between gap-2">
           <button
             onClick={onReset}
-            className="flex items-center justify-center gap-1.5 rounded-full border border-rose-100 bg-white/80 backdrop-blur-sm px-3 sm:px-5 py-2.5 text-xs font-black text-slate-600 shadow-sm hover:text-rose-500 hover:border-rose-200 transition-all active:scale-95 cursor-pointer flex-shrink-0"
+            className="flex items-center justify-center gap-1.5 rounded-full border border-[rgba(32,9,15,0.1)] bg-white px-3 sm:px-4 py-2.5 text-xs font-semibold text-[#6b4a56] hover:text-[#20090f] transition-colors flex-shrink-0"
             aria-label="Back to upload"
           >
             <ArrowLeft size={14} /> <span className="hidden sm:inline">Back</span>
           </button>
-
-          <div 
-            onClick={onReset} 
-            className="flex items-center gap-1.5 bg-white/70 backdrop-blur-sm border border-rose-100/50 px-3 sm:px-4 py-2 rounded-full shadow-sm flex-shrink-0 cursor-pointer hover:bg-rose-50/50 hover:border-rose-200 transition-colors"
-          >
-            <img src="/lovelens_logo.png" alt="LoveLens Logo" className="h-5 w-5 object-contain rounded" />
-            <h1 className="text-sm font-black text-slate-800 tracking-tight hidden sm:block">LoveLens</h1>
-          </div>
-
+          <button onClick={onReset} className="flex items-center gap-1.5 flex-shrink-0" aria-label="LoveLens home">
+            <img src="/lovelens_logo.png" alt="" className="h-7 w-7 object-contain rounded-lg" />
+            <span className="text-[15px] font-semibold tracking-tight hidden sm:block">LoveLens</span>
+          </button>
           <div className="flex items-center gap-2 flex-shrink-0">
             <a
               href={`https://wa.me/?text=${encodeURIComponent("I just checked our chat on LoveLens 👀 Who's more into who? Check yours (it's private, works in your browser): https://getlovelens.com")}`}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => track("share_partner_click", { unlocked: isUnlocked })}
-              className="flex items-center justify-center gap-1.5 rounded-full bg-[#20090f] hover:bg-black px-3.5 sm:px-4 py-2.5 text-xs font-semibold text-white shadow-md transition-all active:scale-[0.98]"
+              className="flex items-center justify-center gap-1.5 rounded-full bg-[#20090f] hover:bg-black px-3.5 py-2.5 text-xs font-semibold text-white transition-colors"
               aria-label="Send LoveLens to your partner on WhatsApp"
             >
               <MessageCircle size={14} /> <span className="hidden sm:inline">Send to partner</span>
@@ -404,273 +403,191 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                 track("share_card_open", { unlocked: isUnlocked });
                 setIsShareOpen(true);
               }}
-              className="flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-rose-500 to-indigo-500 hover:opacity-95 px-3.5 sm:px-5 py-2.5 text-xs font-black text-white shadow-md shadow-rose-200 hover:scale-[1.01] active:scale-[0.98] transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1.5 rounded-full border border-[rgba(32,9,15,0.1)] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#20090f] hover:border-[#e11d48] transition-colors"
               aria-label="Share card"
             >
-              <Share2 size={14} /> <span className="hidden sm:inline">Share Card</span>
+              <Share2 size={14} className="text-[#e11d48]" /> <span className="hidden sm:inline">Share</span>
             </button>
             <button
-              onClick={() => {
-                if (!isUnlocked) {
-                  setIsPaywallOpen(true);
-                } else {
-                  window.print();
-                }
-              }}
-              className="flex items-center justify-center gap-1.5 rounded-full bg-white border border-rose-100 hover:border-rose-200 px-3.5 sm:px-4 py-2.5 text-xs font-black text-slate-600 shadow-sm hover:scale-[1.01] active:scale-[0.98] transition-all cursor-pointer"
+              onClick={() => (isUnlocked ? window.print() : openPaywall("pdf"))}
+              className="flex items-center justify-center gap-1.5 rounded-full border border-[rgba(32,9,15,0.1)] bg-white px-3.5 py-2.5 text-xs font-semibold text-[#20090f] hover:border-[#e11d48] transition-colors"
               aria-label="Download PDF report"
             >
-              {isUnlocked ? (
-                <FileText size={14} className="text-rose-500" />
-              ) : (
-                <Lock size={12} className="text-rose-400" />
-              )}
+              {isUnlocked ? <FileText size={14} className="text-[#e11d48]" /> : <Lock size={12} className="text-[#e11d48]" />}
               <span className="hidden sm:inline">PDF</span>
             </button>
           </div>
         </div>
 
-        {/* Brand Banner */}
-        <motion.div
-          className="mb-8 text-center"
-          variants={revealVariants}
-          initial="hidden"
-          animate={revealReady ? "visible" : "hidden"}
-          custom={0}
-        >
-          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-100/60 px-4 py-1.5 text-[10px] font-black text-rose-500 tracking-widest uppercase mb-3 shadow-sm">
-            <Sparkles size={10} className="animate-pulse" /> CHAT ANALYSIS WRAPPED
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-800 md:text-4xl bg-gradient-to-r from-slate-800 via-rose-500 to-indigo-600 bg-clip-text text-transparent break-words px-2">
-            {p1} & {p2}
+        {/* Hero: who, and how much we read */}
+        <motion.div className="mb-6 text-center" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0}>
+          <span className="eyebrow"><Sparkles size={12} className="text-[#e11d48]" /> Your chat, decoded</span>
+          <h2 className="font-display mt-4 px-2 text-[42px] leading-[1.04] md:text-[64px] break-words">
+            {p1} <span className="italic text-[#e11d48]">&amp;</span> {p2}
           </h2>
-          <p className="mt-1.5 text-slate-400 text-xs font-semibold">
-            All stats calculated locally inside your web browser.
+          <p className="mt-3 text-sm text-[#6b4a56]">
+            {totalMessages.toLocaleString()} messages · talking since {relationshipStartDate} · {daysTogether.toLocaleString()} days
           </p>
         </motion.div>
 
-        {/* Relationship Score Hero Card */}
-        <motion.div
-          className="mb-8 relative overflow-hidden rounded-3xl border border-rose-100/50 bg-gradient-to-br from-white/95 via-rose-50/20 to-indigo-50/30 p-6 shadow-md backdrop-blur-md"
-          variants={revealVariants}
-          initial="hidden"
-          animate={revealReady ? "visible" : "hidden"}
-          custom={0.15}
-        >
-          {/* Decorative glows inside card */}
-          <div className="absolute -top-10 -right-10 w-24 h-24 bg-rose-400/20 rounded-full blur-xl pointer-events-none" />
-          <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-indigo-400/20 rounded-full blur-xl pointer-events-none" />
-          
-          <div className="flex flex-col-reverse md:flex-row items-center justify-between gap-5 md:gap-6 relative z-10">
-            <div className="flex flex-col items-center md:items-start text-center md:text-left space-y-2">
-              <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 border border-rose-100/60 px-3 py-1 text-[9px] font-black text-rose-500 tracking-wider uppercase shadow-sm">
-                💖 Chemistry Meter
-              </span>
-              <h3 className="text-xl font-black text-slate-800">Your Relationship Score</h3>
-              <p className="text-xs text-slate-500 font-semibold max-w-md leading-relaxed">
-                {relationshipScore >= 90 
-                  ? "Unstoppable connection! You two share an exceptional texting compatibility, replying fast and maintaining deep mutual engagement. 🏆"
-                  : relationshipScore >= 75
-                    ? "Strong chemistry! You maintain a balanced chat dynamic with great emotional warmth and steady rhythms. 💫"
-                    : "Work in progress! You might have different texting speeds or active times, but the effort is definitely there. ☕"}
-              </p>
+        {/* Free facts: proof the analysis is real */}
+        <motion.div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0.15}>
+          {[
+            { k: "Sends more texts", v: count1 >= count2 ? p1 : p2, s: `${Math.max(pct1, pct2)}% of all messages` },
+            {
+              k: "Replies faster",
+              v: (avgResponseTimes[p1] || Infinity) <= (avgResponseTimes[p2] || Infinity) ? p1 : p2,
+              s: `in ${formatReplySpeed(Math.min(avgResponseTimes[p1] || Infinity, avgResponseTimes[p2] || Infinity))} on average`,
+            },
+            { k: "Longest streak", v: `${longestStreak} days`, s: currentStreak > 0 ? `${currentStreak} days and counting 🔥` : "without missing a day" },
+            {
+              k: "Chemistry",
+              v: `${relationshipScore}%`,
+              s: relationshipScore >= 90 ? "Exceptional" : relationshipScore >= 75 ? "Strong chemistry" : "Work in progress",
+            },
+          ].map((f) => (
+            <div key={f.k} className="premium-card rounded-2xl p-4">
+              <span className="block text-xs text-[#a78e97]">{f.k}</span>
+              <span className="mt-1 block truncate text-lg font-semibold">{f.v}</span>
+              <span className="mt-0.5 block text-xs text-[#6b4a56]">{f.s}</span>
             </div>
-            
-            {/* Score Ring UI */}
-            <div className="relative flex items-center justify-center h-28 w-28 flex-shrink-0">
-              <svg className="absolute w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                {/* Background Ring */}
-                <circle 
-                  cx="50" 
-                  cy="50" 
-                  r="40" 
-                  stroke="#FFE4E6" 
-                  strokeWidth="8" 
-                  fill="transparent" 
-                />
-                {/* Foreground Progress Ring with Gradient */}
-                <circle 
-                  cx="50" 
-                  cy="50" 
-                  r="40" 
-                  stroke="url(#scoreGradient)" 
-                  strokeWidth="8" 
-                  fill="transparent" 
-                  strokeDasharray="251.2"
-                  strokeDashoffset={251.2 - (251.2 * relationshipScore) / 100}
-                  strokeLinecap="round"
-                  className="transition-all duration-1000 ease-out"
-                />
-                <defs>
-                  <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#FF4E88" />
-                    <stop offset="100%" stopColor="#8B5CF6" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              {/* Inner score text */}
-              <div className="flex flex-col items-center justify-center relative">
-                <span className="text-3xl font-black text-slate-800 tracking-tight">{relationshipScore}%</span>
-                <span className="text-[9px] font-black text-rose-500 uppercase tracking-widest mt-0.5 animate-pulse">Match</span>
-              </div>
-            </div>
-          </div>
+          ))}
         </motion.div>
 
-        {/* (Free stats + premium gallery relocated below the flagship for conversion) */}
-
-        {/* FLAGSHIP: "Who's Into Who More?" Interest Balance Hero */}
+        {/* FLAGSHIP: who's more into who */}
         <motion.div
-          className="mb-8 relative overflow-hidden rounded-3xl border border-rose-300/40 bg-gradient-to-br from-rose-500 via-rose-500 to-indigo-600 p-6 md:p-8 shadow-xl"
+          className="mb-6 relative overflow-hidden rounded-[32px] bg-gradient-to-br from-[#fb4d6d] via-[#e11d48] to-[#6d28d9] p-6 md:p-9 text-white shadow-[0_40px_80px_-40px_rgba(225,29,72,0.7)]"
           variants={revealVariants}
           initial="hidden"
           animate={revealReady ? "visible" : "hidden"}
-          custom={0.35}
+          custom={0.3}
         >
-          <div className="absolute -top-16 -right-16 w-48 h-48 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-indigo-300/20 rounded-full blur-3xl pointer-events-none" />
-
-          <div className="relative z-10">
-            <div className="flex items-center justify-between mb-5">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-[9px] font-black text-white tracking-widest uppercase backdrop-blur-sm border border-white/20">
-                💘 The Big Question
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[9px] font-black text-rose-600 tracking-wider uppercase shadow-sm">
-                {isUnlocked ? <><Sparkles size={9} className="fill-rose-500 text-rose-500" /> Revealed</> : <><Lock size={9} /> Locked</>}
+          <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-white/15 blur-3xl" />
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <span className="rounded-full bg-white/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]">The big question</span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#e11d48]">
+                {isUnlocked ? <><Sparkles size={11} /> Revealed</> : <><Lock size={11} /> Ready to reveal</>}
               </span>
             </div>
+            <h3 className="font-display mt-5 text-center text-[40px] leading-[1.04] md:text-6xl">Who&apos;s more into who?</h3>
 
-            <h3 className="text-2xl md:text-3xl font-black text-white text-center tracking-tight">Who's more into who?</h3>
-            <p className="text-[10px] font-black text-white/60 text-center uppercase tracking-[0.2em] mt-1 mb-6">Interest &amp; Effort Balance</p>
-
-            {/* VS battle row */}
-            <div className="flex items-end justify-center gap-3 md:gap-8 mb-6">
-              {/* Partner 1 */}
-              <div className="flex flex-col items-center gap-2 flex-1 max-w-[38%]">
-                <div className={`relative h-16 w-16 md:h-20 md:w-20 rounded-full flex items-center justify-center text-lg md:text-2xl font-black shadow-lg ring-4 bg-white text-rose-600 ${isUnlocked && !isBalanced && effortLeader === p1 ? "ring-yellow-300 scale-110" : "ring-white/30"}`}>
-                  {initials(p1)}
-                  {isUnlocked && !isBalanced && effortLeader === p1 && <span className="absolute -top-4 text-2xl drop-shadow">👑</span>}
-                </div>
-                <span className="text-xs font-black text-white truncate max-w-full">{p1}</span>
-                {isUnlocked
-                  ? <span className="text-xl font-black text-white">{p1Effort}%</span>
-                  : <span className="text-xl font-black text-white/50 blur-[4px] select-none">??%</span>}
-              </div>
-
-              {/* Center VS */}
-              <div className="flex flex-col items-center pb-8">
-                <div className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-white/15 border border-white/30 backdrop-blur-sm flex items-center justify-center text-white font-black text-xs md:text-sm shadow-inner">VS</div>
-              </div>
-
-              {/* Partner 2 */}
-              <div className="flex flex-col items-center gap-2 flex-1 max-w-[38%]">
-                <div className={`relative h-16 w-16 md:h-20 md:w-20 rounded-full flex items-center justify-center text-lg md:text-2xl font-black shadow-lg ring-4 bg-white text-indigo-600 ${isUnlocked && !isBalanced && effortLeader === p2 ? "ring-yellow-300 scale-110" : "ring-white/30"}`}>
-                  {initials(p2)}
-                  {isUnlocked && !isBalanced && effortLeader === p2 && <span className="absolute -top-4 text-2xl drop-shadow">👑</span>}
-                </div>
-                <span className="text-xs font-black text-white truncate max-w-full">{p2}</span>
-                {isUnlocked
-                  ? <span className="text-xl font-black text-white">{p2Effort}%</span>
-                  : <span className="text-xl font-black text-white/50 blur-[4px] select-none">??%</span>}
-              </div>
+            <div className="mt-7 flex items-start justify-center gap-4 md:gap-12">
+              {[
+                { name: p1, pct: p1Effort, ink: "text-[#e11d48]" },
+                { name: p2, pct: p2Effort, ink: "text-[#4f46e5]" },
+              ].map((person, i) => (
+                <React.Fragment key={person.name + i}>
+                  {i === 1 && <span className="mt-6 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/30 bg-white/10 text-xs font-semibold">VS</span>}
+                  <div className="flex min-w-0 flex-1 flex-col items-center gap-2" style={{ maxWidth: "40%" }}>
+                    <div className={`relative flex h-[72px] w-[72px] items-center justify-center rounded-full bg-white text-2xl font-semibold ${person.ink} ring-4 ${isUnlocked && !isBalanced && effortLeader === person.name ? "ring-yellow-300" : "ring-white/30"}`}>
+                      {initials(person.name)}
+                      {isUnlocked && !isBalanced && effortLeader === person.name && <span className="absolute -top-5 text-2xl">👑</span>}
+                    </div>
+                    <span className="max-w-full truncate text-sm font-semibold">{person.name}</span>
+                    {isUnlocked ? (
+                      <span className="font-display text-3xl">{person.pct}%</span>
+                    ) : (
+                      <span className="select-none font-display text-3xl text-white/60 blur-[6px]">88%</span>
+                    )}
+                  </div>
+                </React.Fragment>
+              ))}
             </div>
 
             {isUnlocked ? (
               <>
-                <div className="h-5 w-full overflow-hidden rounded-full bg-black/25 p-0.5 flex shadow-inner mb-4">
+                <div className="mt-6 flex h-4 w-full overflow-hidden rounded-full bg-black/25 p-0.5">
                   <div className="h-full rounded-l-full bg-white transition-all duration-700" style={{ width: `${p1Effort}%` }} />
                   <div className="h-full rounded-r-full bg-yellow-300 transition-all duration-700" style={{ width: `${p2Effort}%` }} />
                 </div>
-                <div className="rounded-2xl bg-white/15 border border-white/20 backdrop-blur-sm p-4 text-center">
-                  <p className="text-xs md:text-sm font-bold text-white leading-relaxed">{interestBalance.verdict}</p>
+                <div className="mt-4 rounded-2xl bg-white/15 p-4 text-center">
+                  <p className="text-[15px] font-medium leading-relaxed">{interestBalance.verdict}</p>
                 </div>
               </>
             ) : (
               <>
-                {/* Mystery bar — equal halves so width reveals nothing */}
-                <div className="relative h-9 w-full overflow-hidden rounded-full bg-black/25 mb-4 flex items-center justify-center">
-                  <div className="absolute inset-0 flex">
-                    <div className="h-full w-1/2 bg-white/20" />
-                    <div className="h-full w-1/2 bg-white/10" />
-                  </div>
-                  <div className="relative flex items-center gap-1.5 text-white font-black text-[11px] uppercase tracking-wider">
-                    <Lock size={12} /> {isBalanced ? "Too close to call…" : `One of you carries ${effortLeaderPct}%`}
-                  </div>
+                <div className="mt-6 rounded-2xl bg-black/20 px-4 py-3 text-center text-[15px] font-semibold">
+                  {isBalanced ? "It's close… but one of you is still ahead." : `One of you carries ${effortLeaderPct}% of the effort.`}
                 </div>
-                <p className="text-center text-xs font-bold text-white/85 mb-5 max-w-md mx-auto leading-relaxed">
-                  {isBalanced
-                    ? "Your effort split is surprisingly close… but there's still a winner. Unlock to see who. 👀"
-                    : `One of you is putting in ${effortLeaderPct}% of the effort — initiating, replying faster, being more affectionate. But who? 👀`}
-                </p>
+                <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/70">The evidence from your chat</p>
+                <div className="mt-2 space-y-2">
+                  {[
+                    firstILoveYou ? { icon: "💗", text: `Said "I love you" first, on ${firstILoveYou.date}` } : null,
+                    maxInitiation > 0 ? { icon: "💬", text: `Starts ${maxInitiation.toLocaleString()} of your conversations` } : null,
+                    maxDoubleText > 0 ? { icon: "📲", text: `Double-texted ${maxDoubleText.toLocaleString()} times before a reply` } : null,
+                    (longestSilence?.duration || 0) > 0 ? { icon: "⏳", text: `Left the other on read for ${formatLongSilence(longestSilence.duration || 0)}` } : null,
+                    maxNightPct > 0 ? { icon: "🦉", text: `Sends ${maxNightPct}% of texts after midnight` } : null,
+                  ]
+                    .filter((c): c is { icon: string; text: string } => c !== null)
+                    .slice(0, 3)
+                    .map((clue) => (
+                    <button
+                      key={clue.text}
+                      onClick={() => openPaywall("verdict_clue")}
+                      className="flex w-full items-center justify-between gap-3 rounded-2xl bg-white/10 px-4 py-3 text-left text-sm transition-colors hover:bg-white/20"
+                    >
+                      <span className="flex min-w-0 items-center gap-2.5"><span>{clue.icon}</span><span className="min-w-0">{clue.text}</span></span>
+                      <span className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-[#e11d48]">
+                        <span className="select-none blur-[3px]">●●●●●</span>
+                        <Lock size={11} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
                 <button
-                  onClick={() => setIsPaywallOpen(true)}
-                  className="w-full flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-black text-rose-600 shadow-lg hover:scale-[1.01] active:scale-[0.98] transition-all"
+                  onClick={() => openPaywall("verdict_card")}
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-[15px] font-semibold text-[#be123c] shadow-lg transition-transform hover:scale-[1.01] active:scale-[0.99]"
                 >
-                  <Lock size={14} /> Reveal who's more into who · {price}
+                  <Lock size={15} /> Reveal who · {price}
                 </button>
+                <p className="mt-2.5 text-center text-xs text-white/75">
+                  Already calculated from your {totalMessages.toLocaleString()} messages · one-time · no subscription
+                </p>
               </>
             )}
           </div>
         </motion.div>
 
-        {/* Premium Insights Gallery — the juicy locked stuff, surfaced high up */}
-        <motion.div
-          ref={premiumGalleryRef}
-          className="mb-8"
-          variants={revealVariants}
-          initial="hidden"
-          animate={revealReady ? "visible" : "hidden"}
-          custom={0.55}
-        >          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        {/* More of what your chat reveals */}
+        <motion.div ref={premiumGalleryRef} className="mb-6" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0.45}>
+          <div className="mb-3 flex items-end justify-between gap-3">
             <div>
-              <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                {isUnlocked ? <>Your Juiciest Insights <Sparkles size={16} className="text-rose-500 fill-rose-500" /></> : <>The Stuff You Really Want 👀</>}
-              </h3>
-              <p className="text-xs font-semibold text-slate-500 mt-0.5">
-                {isUnlocked ? "The highlights from your full premium report." : "We crunched the spicy stats. Tap any card to reveal who."}
-              </p>
+              <h3 className="font-display text-3xl">{isUnlocked ? "Your highlights" : "What else your chat says"}</h3>
+              <p className="mt-0.5 text-sm text-[#6b4a56]">{isUnlocked ? "The best bits of your full report." : "Real numbers from your chat. Tap any to see who."}</p>
             </div>
-            {!isUnlocked && (
-              <button
-                onClick={() => setIsPaywallOpen(true)}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-2xl bg-rose-500 hover:bg-rose-600 px-5 py-3 text-xs font-black text-white shadow-md shadow-rose-200 hover:scale-[1.01] active:scale-[0.98] transition-all"
-              >
-                <Lock size={13} /> Unlock all · {price}
-              </button>
-            )}
           </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-            {premiumHighlights.map((item, idx) => (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {premiumHighlights
+              .filter((item) => {
+                if (item.title === "The Chaser") return maxDoubleText > 0;
+                if (item.title === "Conversation Starter") return maxInitiation > 0;
+                if (item.title === "Night Owl") return maxNightPct > 0;
+                if (item.title === "Longest Silence") return (longestSilence?.duration || 0) > 0;
+                return true;
+              })
+              .map((item, idx) => (
               <button
                 key={idx}
-                onClick={() => !isUnlocked && setIsPaywallOpen(true)}
-                className={`text-left rounded-3xl border p-4 md:p-5 shadow-sm backdrop-blur-md transition-all duration-300 ${
-                  isUnlocked
-                    ? "border-white/60 bg-white/80 cursor-default"
-                    : "border-rose-100 bg-white/70 cursor-pointer hover:border-rose-300 hover:shadow-md hover:-translate-y-0.5"
-                }`}
+                onClick={() => !isUnlocked && openPaywall("insight_card")}
+                className={`premium-card rounded-3xl p-4 text-left transition-transform ${isUnlocked ? "cursor-default" : "hover:-translate-y-0.5"}`}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className={`h-9 w-9 rounded-xl border flex items-center justify-center text-base ${item.accent}`}>
-                    {item.icon}
-                  </span>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-2xl">{item.icon}</span>
                   {!isUnlocked && (
-                    <span className="h-6 w-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-sm">
-                      <Lock size={11} />
-                    </span>
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#fff1f3] text-[#e11d48]"><Lock size={11} /></span>
                   )}
                 </div>
-                <span className="block text-[9px] font-black text-slate-400 uppercase tracking-wider">{item.title}</span>
+                <span className="block text-xs text-[#a78e97]">{item.title}</span>
                 {isUnlocked ? (
                   <>
-                    <h4 className="text-base font-black text-slate-800 mt-1 leading-tight break-words">{item.answer}</h4>
-                    <p className="text-[10px] font-semibold text-slate-500 mt-0.5 leading-snug">{item.sub}</p>
+                    <h4 className="mt-1 break-words text-base font-semibold leading-tight">{item.answer}</h4>
+                    <p className="mt-0.5 text-xs leading-snug text-[#6b4a56]">{item.sub}</p>
                   </>
                 ) : (
                   <>
-                    <h4 className="text-base font-black text-slate-300 mt-1 blur-[5px] select-none">●●●●●</h4>
-                    <p className="text-[10px] font-bold text-rose-500 mt-1 leading-snug line-clamp-2">{item.teaser}</p>
+                    <p className="mt-1 text-[13px] font-medium leading-snug text-[#20090f] line-clamp-3">{item.teaser}</p>
+                    <span className="mt-2 inline-block select-none rounded-full bg-[#fdf7f5] px-2 py-0.5 text-xs font-semibold text-[#a78e97] blur-[3px]">●●●●●</span>
                   </>
                 )}
               </button>
@@ -678,67 +595,77 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
           </div>
         </motion.div>
 
-        {/* Condensed Free Stats Strip */}
-        <motion.div
-          className="mb-8"
-          variants={revealVariants}
-          initial="hidden"
-          animate={revealReady ? "visible" : "hidden"}
-          custom={0.7}
-        >
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-center">
-            Talking since {relationshipStartDate} · {daysTogether.toLocaleString()} days together
-          </p>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            {[
-              { icon: <MessageSquare size={14} />, color: "bg-rose-500", label: "Total Texts", value: totalMessages.toLocaleString() },
-              { icon: <Award size={14} />, color: "bg-indigo-500", label: "Total Words", value: ((wordCounts[p1] || 0) + (wordCounts[p2] || 0)).toLocaleString() },
-              { icon: <Flame size={14} />, color: "bg-orange-500", label: "Streak Record", value: `${longestStreak}d` },
-              { icon: <Flame size={14} />, color: "bg-rose-400", label: "Current Streak", value: currentStreak > 0 ? `${currentStreak}d 🔥` : "—" },
-              { icon: <Calendar size={14} />, color: "bg-purple-500", label: "Busiest Day", value: `${mostActiveDay.count}` },
-            ].map((s, i) => (
-              <div key={i} className="rounded-2xl border border-white/60 bg-white/70 p-3 shadow-sm backdrop-blur-md flex items-center gap-2.5">
-                <span className={`h-8 w-8 rounded-lg ${s.color} text-white flex items-center justify-center flex-shrink-0`}>{s.icon}</span>
-                <div className="min-w-0">
-                  <span className="block text-[8px] font-black text-slate-400 uppercase tracking-wider truncate">{s.label}</span>
-                  <span className="block text-sm font-black text-slate-800 truncate">{s.value}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+        {/* The full report is ready (locked only) */}
+        {!isUnlocked && (
+          <motion.div className="mb-6 rounded-[28px] bg-[#20090f] p-6 text-white md:p-8" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0.55}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Your full report is ready</p>
+            <h3 className="font-display mt-2 text-[32px] leading-[1.08] md:text-4xl">It&apos;s already calculated. It&apos;s just locked.</h3>
+            <ul className="mt-5 grid grid-cols-1 gap-2.5 text-[14px] sm:grid-cols-2">
+              {[
+                "Who's more into who, and by how much",
+                "Who said \"I love you\" first",
+                "Who chases more and the longest silence",
+                "Red & green flags audit",
+                "Your spark timeline: when it peaked",
+                "Pet names, apologies and inside jokes",
+                "Good mornings, goodnights and habit quirks",
+                "The verdict on your share card, plus a PDF",
+              ].map((x) => (
+                <li key={x} className="flex items-start gap-2.5"><Check size={16} className="mt-0.5 flex-shrink-0 text-[#fb7185]" /> {x}</li>
+              ))}
+            </ul>
+            <button onClick={() => openPaywall("report_ready")} className="premium-btn-rose mt-6 w-full rounded-2xl py-4 text-[15px] font-semibold">
+              Unlock my full report · {price}
+            </button>
+            <p className="mt-2.5 text-center text-xs text-white/55">One-time payment · secure checkout by Dodo Payments · your chat never leaves your device</p>
+          </motion.div>
+        )}
+
+        {/* Free numbers */}
+        <motion.div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" variants={revealVariants} initial="hidden" animate={revealReady ? "visible" : "hidden"} custom={0.65}>
+          {[
+            { label: "Total texts", value: totalMessages.toLocaleString() },
+            { label: "Total words", value: ((wordCounts[p1] || 0) + (wordCounts[p2] || 0)).toLocaleString() },
+            { label: "Streak record", value: `${longestStreak} days` },
+            { label: "Current streak", value: currentStreak > 0 ? `${currentStreak} days 🔥` : "—" },
+            { label: "Busiest day", value: `${mostActiveDay.count} texts` },
+          ].map((x) => (
+            <div key={x.label} className="rounded-2xl border border-[rgba(32,9,15,0.07)] bg-white px-4 py-3">
+              <span className="block text-xs text-[#a78e97]">{x.label}</span>
+              <span className="mt-0.5 block truncate text-[15px] font-semibold">{x.value}</span>
+            </div>
+          ))}
         </motion.div>
 
-        {/* Tab Selectors — natural-width scroll on mobile, equal-width on desktop */}
+        {/* Tabs */}
         <motion.div
-          className="mb-8 flex overflow-x-auto rounded-2xl bg-slate-100 p-1.5 border border-slate-200/40 scrollbar-none snap-x gap-1"
+          className="mb-6 flex gap-1 overflow-x-auto rounded-2xl border border-[rgba(32,9,15,0.07)] bg-white p-1 scrollbar-none snap-x"
           variants={revealVariants}
           initial="hidden"
           animate={revealReady ? "visible" : "hidden"}
-          custom={0.85}
+          custom={0.75}
         >
           {(
             [
               { id: "overview", label: "Overview" },
-              { id: "verdict", label: "The Verdict 💘", locked: !isUnlocked },
-              { id: "emojis", label: "Emoji Battle" },
-              { id: "activity", label: "Activity Rhythm" },
-              { id: "loveaudit", label: "Love Audit", locked: !isUnlocked },
-              { id: "timeline", label: "Spark Timeline", locked: !isUnlocked },
-              { id: "lexicon", label: "Lexicon & Jokes", locked: !isUnlocked },
-              { id: "quirks", label: "Habit Quirks", locked: !isUnlocked }
+              { id: "verdict", label: "The verdict 💘", locked: !isUnlocked },
+              { id: "emojis", label: "Emoji battle" },
+              { id: "activity", label: "Activity rhythm" },
+              { id: "loveaudit", label: "Love audit", locked: !isUnlocked },
+              { id: "timeline", label: "Spark timeline", locked: !isUnlocked },
+              { id: "lexicon", label: "Lexicon & jokes", locked: !isUnlocked },
+              { id: "quirks", label: "Habit quirks", locked: !isUnlocked },
             ] as { id: TabType; label: string; locked?: boolean }[]
           ).map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-shrink-0 md:flex-1 snap-start py-2.5 px-3.5 md:px-4 rounded-xl font-bold text-[11px] md:text-xs text-center whitespace-nowrap transition-all duration-200 flex items-center justify-center gap-1 ${
-                activeTab === tab.id
-                  ? "bg-white text-rose-500 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
+              className={`flex flex-shrink-0 snap-start items-center justify-center gap-1 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-colors md:flex-1 ${
+                activeTab === tab.id ? "bg-[#20090f] text-white" : "text-[#6b4a56] hover:text-[#20090f]"
               }`}
             >
               {tab.label}
-              {tab.locked && <Lock size={10} className="text-slate-400" />}
+              {tab.locked && <Lock size={10} className={activeTab === tab.id ? "text-white/70" : "text-[#a78e97]"} />}
             </button>
           ))}
         </motion.div>
@@ -756,11 +683,11 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
           {activeTab === "overview" && (
             <div className="space-y-6">
               {/* Who Texts More */}
-              <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <div className="premium-card rounded-3xl p-6">
+                <h3 className="text-xs font-bold text-[#20090f] mb-4 flex items-center gap-2">
                   <MessageCircle className="text-rose-500" size={16} /> Who Texts More?
                 </h3>
-                <div className="flex justify-between items-end text-xs font-black text-slate-600 mb-2">
+                <div className="flex justify-between items-end text-xs font-bold text-[#6b4a56] mb-2">
                   <span>{p1} ({pct1}%)</span>
                   <span>{p2} ({pct2}%)</span>
                 </div>
@@ -778,7 +705,7 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                     {pct2 >= 15 && `${pct2}%`}
                   </div>
                 </div>
-                <p className="mt-4 text-xs font-semibold text-slate-500 text-center leading-relaxed">
+                <p className="mt-4 text-xs font-semibold text-[#6b4a56] text-center leading-relaxed">
                   {count1 === count2 
                     ? "An absolute 50/50 balance! You two are perfectly in harmony." 
                     : count1 > count2 
@@ -791,46 +718,46 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
               {/* Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Free Box: Avg reply time */}
-                <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                  <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+                <div className="premium-card rounded-3xl p-6">
+                  <h4 className="text-xs font-bold text-[#6b4a56] mb-4 flex items-center gap-1.5">
                     <Reply className="text-rose-500" size={14} /> Average Reply Speed
                   </h4>
                   <div className="space-y-3">
                     <div className="flex justify-between items-center text-sm font-semibold">
-                      <span className="text-slate-600 truncate max-w-[150px]">{p1}</span>
-                      <span className="font-extrabold text-slate-800">{formatReplySpeed(avgResponseTimes[p1] || 0)}</span>
+                      <span className="text-[#6b4a56] truncate max-w-[150px]">{p1}</span>
+                      <span className="font-extrabold text-[#20090f]">{formatReplySpeed(avgResponseTimes[p1] || 0)}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100/50 pt-3">
-                      <span className="text-slate-600 truncate max-w-[150px]">{p2}</span>
-                      <span className="font-extrabold text-slate-800">{formatReplySpeed(avgResponseTimes[p2] || 0)}</span>
+                      <span className="text-[#6b4a56] truncate max-w-[150px]">{p2}</span>
+                      <span className="font-extrabold text-[#20090f]">{formatReplySpeed(avgResponseTimes[p2] || 0)}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Premium Box: Longest Silence Gap */}
                 <div 
-                  onClick={() => !isUnlocked && setIsPaywallOpen(true)}
+                  onClick={() => !isUnlocked && openPaywall("tab")}
                   className={`rounded-3xl border p-6 shadow-md backdrop-blur-md transition-all duration-300 ${
-                    isUnlocked ? "border-white/60 bg-white/70" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"
+                    isUnlocked ? "border-[rgba(32,9,15,0.07)] bg-white" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"
                   }`}
                 >
-                  <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-4 flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-[#6b4a56] mb-4 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
                       <Clock className="text-rose-500" size={14} /> Longest Silence Record
                     </span>
                     {!isUnlocked && (
-                      <span className="text-[9px] font-black text-rose-500 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                      <span className="text-[9px] font-bold text-rose-500 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full flex items-center gap-0.5">
                         <Lock size={8} /> Premium
                       </span>
                     )}
                   </h4>
                   <div className="space-y-1">
-                    <div className="text-xl font-black text-slate-800">
+                    <div className="text-xl font-bold text-[#20090f]">
                       {renderTeasedValue(formatLongSilence(longestSilence.duration || 0), "14h 23m")}
                     </div>
-                    <p className="text-[10px] font-semibold text-slate-500 mt-1">
+                    <p className="text-[10px] font-semibold text-[#6b4a56] mt-1">
                       {isUnlocked ? (
-                        <>Taken by <strong className="font-black">{longestSilence.ignorer}</strong> on {longestSilence.date}</>
+                        <>Taken by <strong className="font-bold">{longestSilence.ignorer}</strong> on {longestSilence.date}</>
                       ) : (
                         <>Ignored by {renderTeasedValue("Alex", "Partner")} on {renderTeasedValue("Nov 12", "Date")}</>
                       )}
@@ -845,13 +772,13 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
           {activeTab === "verdict" && (
             <div className="space-y-6">
               <div className="text-center mb-2">
-                <h3 className="text-lg font-black text-slate-800">The Verdict 💘</h3>
-                <p className="text-xs font-semibold text-slate-500">Who's actually more into who — broken down signal by signal.</p>
+                <h3 className="text-lg font-bold text-[#20090f]">The Verdict 💘</h3>
+                <p className="text-xs font-semibold text-[#6b4a56]">Who's actually more into who — broken down signal by signal.</p>
               </div>
 
               {/* Effort breakdown */}
-              <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+              <div className="premium-card rounded-3xl p-6">
+                <h4 className="text-xs font-bold text-[#6b4a56] mb-4 flex items-center gap-1.5">
                   <Activity className="text-rose-500" size={14} /> Effort Signals — Who Leads Each
                 </h4>
                 <div className="space-y-3">
@@ -862,20 +789,20 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                     { label: "Double-texts more", leader: (doubleTextCounts[p1] || 0) >= (doubleTextCounts[p2] || 0) ? p1 : p2, icon: "📲" },
                     { label: "Writes more", leader: (wordCounts[p1] || 0) >= (wordCounts[p2] || 0) ? p1 : p2, icon: "✍️" }
                   ].map((sig, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs font-bold text-slate-600 border-b border-slate-100/50 last:border-0 pb-2.5 last:pb-0">
+                    <div key={idx} className="flex items-center justify-between text-xs font-bold text-[#6b4a56] border-b border-slate-100/50 last:border-0 pb-2.5 last:pb-0">
                       <span className="flex items-center gap-2"><span>{sig.icon}</span> {sig.label}</span>
-                      <span className="font-black text-rose-500">
+                      <span className="font-bold text-rose-500">
                         {renderTeasedValue(sig.leader, "Partner")}
                       </span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-5 rounded-2xl bg-gradient-to-r from-rose-50 to-indigo-50 border border-rose-100 p-4 text-center">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-1">Overall Verdict</span>
+                  <span className="text-[10px] font-bold text-[#a78e97] block mb-1">Overall Verdict</span>
                   {isUnlocked ? (
-                    <p className="text-sm font-black text-slate-800 leading-relaxed">{interestBalance.verdict}</p>
+                    <p className="text-sm font-bold text-[#20090f] leading-relaxed">{interestBalance.verdict}</p>
                   ) : (
-                    <p className="text-sm font-black text-slate-800">
+                    <p className="text-sm font-bold text-[#20090f]">
                       {renderTeasedValue(`${effortLeader} is more invested`, "Someone is more invested")}
                     </p>
                   )}
@@ -885,79 +812,79 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Who said I love you first */}
                 <div
-                  onClick={() => !isUnlocked && setIsPaywallOpen(true)}
-                  className={`rounded-3xl border p-6 shadow-md backdrop-blur-md ${isUnlocked ? "border-white/60 bg-white/70" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"}`}
+                  onClick={() => !isUnlocked && openPaywall("tab")}
+                  className={`rounded-3xl border p-6 shadow-md backdrop-blur-md ${isUnlocked ? "border-[rgba(32,9,15,0.07)] bg-white" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"}`}
                 >
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Who Said "I Love You" First 💗</span>
+                  <span className="text-[10px] font-bold text-[#a78e97] block mb-2">Who Said "I Love You" First 💗</span>
                   {firstILoveYou ? (
                     <>
-                      <h4 className="text-2xl font-black text-slate-800">
+                      <h4 className="text-2xl font-bold text-[#20090f]">
                         {renderTeasedValue(firstILoveYou.sender, "Partner")}
                       </h4>
-                      <p className="text-[11px] font-semibold text-slate-500 mt-2">
+                      <p className="text-[11px] font-semibold text-[#6b4a56] mt-2">
                         {isUnlocked
                           ? `Dropped the L-word first on ${firstILoveYou.date}.`
                           : <>Someone blinked first on {firstILoveYou.date}. Unlock to see who. 👀</>}
                       </p>
                     </>
                   ) : (
-                    <p className="text-xs font-semibold text-slate-400 mt-2">No explicit "I love you" detected in this chat yet.</p>
+                    <p className="text-xs font-semibold text-[#a78e97] mt-2">No explicit "I love you" detected in this chat yet.</p>
                   )}
                 </div>
 
                 {/* Who chases more */}
                 <div
-                  onClick={() => !isUnlocked && setIsPaywallOpen(true)}
-                  className={`rounded-3xl border p-6 shadow-md backdrop-blur-md ${isUnlocked ? "border-white/60 bg-white/70" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"}`}
+                  onClick={() => !isUnlocked && openPaywall("tab")}
+                  className={`rounded-3xl border p-6 shadow-md backdrop-blur-md ${isUnlocked ? "border-[rgba(32,9,15,0.07)] bg-white" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"}`}
                 >
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">The Chaser 📲 (Double Texts)</span>
+                  <span className="text-[10px] font-bold text-[#a78e97] block mb-2">The Chaser 📲 (Double Texts)</span>
                   <div className="flex justify-between items-center text-sm font-semibold mb-2">
-                    <span className="text-slate-600 truncate max-w-[120px]">{p1}</span>
-                    <span className="font-extrabold text-slate-800">{renderTeasedValue(`${doubleTextCounts[p1] || 0}x`, "128x")}</span>
+                    <span className="text-[#6b4a56] truncate max-w-[120px]">{p1}</span>
+                    <span className="font-extrabold text-[#20090f]">{renderTeasedValue(`${doubleTextCounts[p1] || 0}x`, "128x")}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100/50 pt-2.5">
-                    <span className="text-slate-600 truncate max-w-[120px]">{p2}</span>
-                    <span className="font-extrabold text-slate-800">{renderTeasedValue(`${doubleTextCounts[p2] || 0}x`, "44x")}</span>
+                    <span className="text-[#6b4a56] truncate max-w-[120px]">{p2}</span>
+                    <span className="font-extrabold text-[#20090f]">{renderTeasedValue(`${doubleTextCounts[p2] || 0}x`, "44x")}</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 font-medium mt-3 border-t border-slate-50 pt-2">
+                  <p className="text-[10px] text-[#a78e97] font-medium mt-3 border-t border-slate-50 pt-2">
                     Times one of you sent a follow-up before getting a reply.
                   </p>
                 </div>
 
                 {/* Who initiates */}
                 <div
-                  onClick={() => !isUnlocked && setIsPaywallOpen(true)}
-                  className={`rounded-3xl border p-6 shadow-md backdrop-blur-md ${isUnlocked ? "border-white/60 bg-white/70" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"}`}
+                  onClick={() => !isUnlocked && openPaywall("tab")}
+                  className={`rounded-3xl border p-6 shadow-md backdrop-blur-md ${isUnlocked ? "border-[rgba(32,9,15,0.07)] bg-white" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"}`}
                 >
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">The Conversation Starter 💬</span>
+                  <span className="text-[10px] font-bold text-[#a78e97] block mb-2">The Conversation Starter 💬</span>
                   <div className="flex justify-between items-center text-sm font-semibold mb-2">
-                    <span className="text-slate-600 truncate max-w-[120px]">{p1}</span>
-                    <span className="font-extrabold text-slate-800">{renderTeasedValue(`${initiationCounts[p1] || 0}x`, "312x")}</span>
+                    <span className="text-[#6b4a56] truncate max-w-[120px]">{p1}</span>
+                    <span className="font-extrabold text-[#20090f]">{renderTeasedValue(`${initiationCounts[p1] || 0}x`, "312x")}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100/50 pt-2.5">
-                    <span className="text-slate-600 truncate max-w-[120px]">{p2}</span>
-                    <span className="font-extrabold text-slate-800">{renderTeasedValue(`${initiationCounts[p2] || 0}x`, "190x")}</span>
+                    <span className="text-[#6b4a56] truncate max-w-[120px]">{p2}</span>
+                    <span className="font-extrabold text-[#20090f]">{renderTeasedValue(`${initiationCounts[p2] || 0}x`, "190x")}</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 font-medium mt-3 border-t border-slate-50 pt-2">
+                  <p className="text-[10px] text-[#a78e97] font-medium mt-3 border-t border-slate-50 pt-2">
                     Who breaks the silence and texts first after a long gap.
                   </p>
                 </div>
 
                 {/* Avg message length */}
                 <div
-                  onClick={() => !isUnlocked && setIsPaywallOpen(true)}
-                  className={`rounded-3xl border p-6 shadow-md backdrop-blur-md ${isUnlocked ? "border-white/60 bg-white/70" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"}`}
+                  onClick={() => !isUnlocked && openPaywall("tab")}
+                  className={`rounded-3xl border p-6 shadow-md backdrop-blur-md ${isUnlocked ? "border-[rgba(32,9,15,0.07)] bg-white" : "border-rose-100 bg-rose-50/10 cursor-pointer hover:border-rose-300"}`}
                 >
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Essayist vs One-Worder ✍️</span>
+                  <span className="text-[10px] font-bold text-[#a78e97] block mb-2">Essayist vs One-Worder ✍️</span>
                   <div className="flex justify-between items-center text-sm font-semibold mb-2">
-                    <span className="text-slate-600 truncate max-w-[120px]">{p1}</span>
-                    <span className="font-extrabold text-slate-800">{renderTeasedValue(`${avgMessageLength[p1] || 0} words/msg`, "12.4 words/msg")}</span>
+                    <span className="text-[#6b4a56] truncate max-w-[120px]">{p1}</span>
+                    <span className="font-extrabold text-[#20090f]">{renderTeasedValue(`${avgMessageLength[p1] || 0} words/msg`, "12.4 words/msg")}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100/50 pt-2.5">
-                    <span className="text-slate-600 truncate max-w-[120px]">{p2}</span>
-                    <span className="font-extrabold text-slate-800">{renderTeasedValue(`${avgMessageLength[p2] || 0} words/msg`, "4.1 words/msg")}</span>
+                    <span className="text-[#6b4a56] truncate max-w-[120px]">{p2}</span>
+                    <span className="font-extrabold text-[#20090f]">{renderTeasedValue(`${avgMessageLength[p2] || 0} words/msg`, "4.1 words/msg")}</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 font-medium mt-3 border-t border-slate-50 pt-2">
+                  <p className="text-[10px] text-[#a78e97] font-medium mt-3 border-t border-slate-50 pt-2">
                     Average words per message — who pours their heart out.
                   </p>
                 </div>
@@ -970,67 +897,67 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
             <div className="space-y-6 relative">
               <div className="space-y-6">
                 <div className="text-center mb-4">
-                  <h3 className="text-lg font-black text-slate-800">Relationship Flags Audit</h3>
-                  <p className="text-xs font-semibold text-slate-500">A side-by-side count of habits, words of affection, and argument frequency.</p>
+                  <h3 className="text-lg font-bold text-[#20090f]">Relationship Flags Audit</h3>
+                  <p className="text-xs font-semibold text-[#6b4a56]">A side-by-side count of habits, words of affection, and argument frequency.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* RED FLAGS BOX */}
-                  <div className="rounded-3xl border border-red-100 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                    <h4 className="text-sm font-black text-red-500 uppercase tracking-wider mb-4 flex items-center gap-1.5 border-b border-red-50 pb-2">
+                  <div className="rounded-3xl border border-red-100 bg-white p-6 shadow-md backdrop-blur-md">
+                    <h4 className="text-sm font-bold text-red-500 mb-4 flex items-center gap-1.5 border-b border-red-50 pb-2">
                       <ShieldAlert size={16} /> Red Flags Audit
                     </h4>
                     <div className="space-y-4">
                       {/* Stat 1: Dry Responding */}
                       <div className="flex flex-col gap-1">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                        <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56]">
                           <span>Dry Responses ("ok", "k", "yeah")</span>
-                          <span className="text-red-500 font-black">
+                          <span className="text-red-500 font-bold">
                             {renderTeasedValue(`${p1}: ${redFlags.dryTexts[p1]} | ${p2}: ${redFlags.dryTexts[p2]}`, "p1: 24 | p2: 120")}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-medium">Flat, low-effort replies.</p>
+                        <p className="text-[10px] text-[#a78e97] font-medium">Flat, low-effort replies.</p>
                       </div>
 
                       {/* Stat 2: Argument Words */}
                       <div className="flex flex-col gap-1 border-t border-slate-100/50 pt-3">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                        <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56]">
                           <span>Argument Word Count</span>
-                          <span className="text-red-500 font-black">
+                          <span className="text-red-500 font-bold">
                             {renderTeasedValue(`${p1}: ${redFlags.arguments[p1]} | ${p2}: ${redFlags.arguments[p2]}`, "p1: 15 | p2: 4")}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-medium">Frequency of words like “stop”, “angry”, “fight”, “ignore”.</p>
+                        <p className="text-[10px] text-[#a78e97] font-medium">Frequency of words like “stop”, “angry”, “fight”, “ignore”.</p>
                       </div>
                     </div>
                   </div>
 
                   {/* GREEN FLAGS BOX */}
-                  <div className="rounded-3xl border border-green-100 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                    <h4 className="text-sm font-black text-green-600 uppercase tracking-wider mb-4 flex items-center gap-1.5 border-b border-green-50 pb-2">
+                  <div className="rounded-3xl border border-green-100 bg-white p-6 shadow-md backdrop-blur-md">
+                    <h4 className="text-sm font-bold text-green-600 mb-4 flex items-center gap-1.5 border-b border-green-50 pb-2">
                       <ShieldCheck size={16} className="text-green-600" /> Green Flags Audit
                     </h4>
                     <div className="space-y-4">
                       {/* Stat 1: Words of Affection */}
                       <div className="flex flex-col gap-1">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                        <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56]">
                           <span>Words of Affection</span>
-                          <span className="text-green-600 font-black">
+                          <span className="text-green-600 font-bold">
                             {renderTeasedValue(`${p1}: ${greenFlags.affection[p1]} | ${p2}: ${greenFlags.affection[p2]}`, "p1: 284 | p2: 125")}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-medium">Counts terms like “love”, “babe”, “miss you”, “cute”.</p>
+                        <p className="text-[10px] text-[#a78e97] font-medium">Counts terms like “love”, “babe”, “miss you”, “cute”.</p>
                       </div>
 
                       {/* Stat 2: Long Texts */}
                       <div className="flex flex-col gap-1 border-t border-slate-100/50 pt-3">
-                        <div className="flex justify-between items-center text-xs font-bold text-slate-500">
+                        <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56]">
                           <span>Paragraph Text messages</span>
-                          <span className="text-green-600 font-black">
+                          <span className="text-green-600 font-bold">
                             {renderTeasedValue(`${p1}: ${greenFlags.longTexts[p1]} | ${p2}: ${greenFlags.longTexts[p2]}`, "p1: 42 | p2: 14")}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-medium">Messages containing 20+ words.</p>
+                        <p className="text-[10px] text-[#a78e97] font-medium">Messages containing 20+ words.</p>
                       </div>
                     </div>
                   </div>
@@ -1044,44 +971,44 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
             <div className="space-y-6 relative">
               <div className="space-y-6">
                 <div className="text-center mb-4">
-                  <h3 className="text-lg font-black text-slate-800">Honeymoon & Spark Timeline</h3>
-                  <p className="text-xs font-semibold text-slate-500">Nostalgic comparison of your relationship stages.</p>
+                  <h3 className="text-lg font-bold text-[#20090f]">Honeymoon & Spark Timeline</h3>
+                  <p className="text-xs font-semibold text-[#6b4a56]">Nostalgic comparison of your relationship stages.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Honeymoon peak card */}
                   <div className="rounded-3xl border border-rose-100 bg-rose-50/20 p-6 shadow-md backdrop-blur-md flex flex-col justify-between h-44">
                     <div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Honeymoon Peak Month 📈</span>
-                      <h4 className="text-2xl font-black text-slate-800">
+                      <span className="text-[10px] font-bold text-[#a78e97] block mb-2">Honeymoon Peak Month 📈</span>
+                      <h4 className="text-2xl font-bold text-[#20090f]">
                         {renderTeasedValue(formattedPeakMonth, "October 2024")}
                       </h4>
-                      <p className="text-xs font-semibold text-slate-500 mt-2 leading-relaxed">
+                      <p className="text-xs font-semibold text-[#6b4a56] mt-2 leading-relaxed">
                         Your absolute peak texting month! You exchanged {renderTeasedValue(peakMonthCount.toLocaleString(), "12,481")} messages.
                       </p>
                     </div>
                   </div>
 
                   {/* Spark Shift card */}
-                  <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md flex flex-col justify-between h-44">
+                  <div className="premium-card rounded-3xl p-6 flex flex-col justify-between h-44">
                     <div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Spark Shift (Early vs Recent) ⚡</span>
+                      <span className="text-[10px] font-bold text-[#a78e97] block mb-2">Spark Shift (Early vs Recent) ⚡</span>
                       <div className="flex justify-between items-center text-sm font-semibold mb-2">
-                        <span className="text-slate-500">Early Stage Daily Avg:</span>
-                        <span className="font-extrabold text-slate-800">
+                        <span className="text-[#6b4a56]">Early Stage Daily Avg:</span>
+                        <span className="font-extrabold text-[#20090f]">
                           {renderTeasedValue(`${sparkShift.firstPeriodAvg} texts/day`, "180 texts/day")}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100/50 pt-2.5">
-                        <span className="text-slate-500">Recent Stage Daily Avg:</span>
-                        <span className="font-extrabold text-slate-800">
+                        <span className="text-[#6b4a56]">Recent Stage Daily Avg:</span>
+                        <span className="font-extrabold text-[#20090f]">
                           {renderTeasedValue(`${sparkShift.recentPeriodAvg} texts/day`, "84 texts/day")}
                         </span>
                       </div>
                     </div>
                     
                     {/* Spark shift calculation indicator badge */}
-                    <div className="mt-2 text-[10px] font-black text-rose-500 bg-rose-50 border border-rose-100 rounded-lg p-2 text-center">
+                    <div className="mt-2 text-[10px] font-bold text-rose-500 bg-rose-50 border border-rose-100 rounded-lg p-2 text-center">
                       {isUnlocked ? (
                         sparkShift.recentPeriodAvg >= sparkShift.firstPeriodAvg ? (
                           <span>🔥 Texting increased by {Math.round(((sparkShift.recentPeriodAvg - sparkShift.firstPeriodAvg) / Math.max(1, sparkShift.firstPeriodAvg)) * 100)}%! The spark is stronger than ever!</span>
@@ -1103,47 +1030,47 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
             <div className="space-y-6 relative">
               <div className="space-y-6">
                 <div className="text-center mb-4">
-                  <h3 className="text-lg font-black text-slate-800">Inside Jokes & Lexicon Audit</h3>
-                  <p className="text-xs font-semibold text-slate-500">Detailed stats on your pet names, peacekeepers, and vocab overlaps.</p>
+                  <h3 className="text-lg font-bold text-[#20090f]">Inside Jokes & Lexicon Audit</h3>
+                  <p className="text-xs font-semibold text-[#6b4a56]">Detailed stats on your pet names, peacekeepers, and vocab overlaps.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Pet Names counts */}
-                  <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-3">Pet Names Used 💖</span>
+                  <div className="premium-card rounded-3xl p-6">
+                    <span className="text-[10px] font-bold text-[#a78e97] block mb-3">Pet Names Used 💖</span>
                     <div className="flex justify-between items-center text-sm font-semibold mb-2">
-                      <span className="text-slate-600 truncate max-w-[120px]">{p1}</span>
-                      <span className="font-extrabold text-slate-800">
+                      <span className="text-[#6b4a56] truncate max-w-[120px]">{p1}</span>
+                      <span className="font-extrabold text-[#20090f]">
                         {renderTeasedValue(`${petNamesCounts[p1]} times`, "284 times")}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100/50 pt-2.5">
-                      <span className="text-slate-600 truncate max-w-[120px]">{p2}</span>
-                      <span className="font-extrabold text-slate-800">
+                      <span className="text-[#6b4a56] truncate max-w-[120px]">{p2}</span>
+                      <span className="font-extrabold text-[#20090f]">
                         {renderTeasedValue(`${petNamesCounts[p2]} times`, "125 times")}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-medium mt-3 border-t border-slate-50 pt-2">
+                    <p className="text-[10px] text-[#a78e97] font-medium mt-3 border-t border-slate-50 pt-2">
                       Counts terms like “babe”, “baby”, “honey”, “darling”, “shona”, “jaan”.
                     </p>
                   </div>
 
                   {/* Apology counts */}
-                  <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-3">The Peacekeeper Meter (Apologies) 🙏</span>
+                  <div className="premium-card rounded-3xl p-6">
+                    <span className="text-[10px] font-bold text-[#a78e97] block mb-3">The Peacekeeper Meter (Apologies) 🙏</span>
                     <div className="flex justify-between items-center text-sm font-semibold mb-2">
-                      <span className="text-slate-600 truncate max-w-[120px]">{p1}</span>
-                      <span className="font-extrabold text-slate-800">
+                      <span className="text-[#6b4a56] truncate max-w-[120px]">{p1}</span>
+                      <span className="font-extrabold text-[#20090f]">
                         {renderTeasedValue(`${apologyCounts[p1]} apologies`, "42 apologies")}
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100/50 pt-2.5">
-                      <span className="text-slate-600 truncate max-w-[120px]">{p2}</span>
-                      <span className="font-extrabold text-slate-800">
+                      <span className="text-[#6b4a56] truncate max-w-[120px]">{p2}</span>
+                      <span className="font-extrabold text-[#20090f]">
                         {renderTeasedValue(`${apologyCounts[p2]} apologies`, "14 apologies")}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-medium mt-3 border-t border-slate-50 pt-2">
+                    <p className="text-[10px] text-[#a78e97] font-medium mt-3 border-t border-slate-50 pt-2">
                       Counts how often you say “sorry”, “apologize”, “my bad”.
                     </p>
                   </div>
@@ -1151,29 +1078,29 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   {/* Vocabulary Overlap */}
                   <div className="rounded-3xl border border-rose-100 bg-rose-50/20 p-6 shadow-md backdrop-blur-md flex flex-col justify-between h-40">
                     <div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Slang & Vocabulary Overlap 🤝</span>
-                      <h4 className="text-2xl font-black text-slate-800">
+                      <span className="text-[10px] font-bold text-[#a78e97] block mb-2">Slang & Vocabulary Overlap 🤝</span>
+                      <h4 className="text-2xl font-bold text-[#20090f]">
                         {renderTeasedValue(`${vocabularyOverlapPct}% Match`, "72% Match")}
                       </h4>
-                      <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-2">
+                      <p className="text-[10px] text-[#6b4a56] font-medium leading-relaxed mt-2">
                         This calculates the overlap of unique words shared between you two. The higher it is, the more inside slang you share!
                       </p>
                     </div>
                   </div>
 
                   {/* Curiosity count */}
-                  <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md flex flex-col justify-between h-40">
+                  <div className="premium-card rounded-3xl p-6 flex flex-col justify-between h-40">
                     <div>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block mb-2">Curiosity Index (Questions Asked) ❓</span>
+                      <span className="text-[10px] font-bold text-[#a78e97] block mb-2">Curiosity Index (Questions Asked) ❓</span>
                       <div className="flex justify-between items-center text-sm font-semibold mb-2 mt-2">
-                        <span className="text-slate-600 truncate max-w-[120px]">{p1}</span>
-                        <span className="font-extrabold text-slate-800">
+                        <span className="text-[#6b4a56] truncate max-w-[120px]">{p1}</span>
+                        <span className="font-extrabold text-[#20090f]">
                           {renderTeasedValue(`${questionCounts[p1]?.toLocaleString()} ?`, "1,284 ?")}
                         </span>
                       </div>
                       <div className="flex justify-between items-center text-sm font-semibold border-t border-slate-100/50 pt-2">
-                        <span className="text-slate-600 truncate max-w-[120px]">{p2}</span>
-                        <span className="font-extrabold text-slate-800">
+                        <span className="text-[#6b4a56] truncate max-w-[120px]">{p2}</span>
+                        <span className="font-extrabold text-[#20090f]">
                           {renderTeasedValue(`${questionCounts[p2]?.toLocaleString()} ?`, "921 ?")}
                         </span>
                       </div>
@@ -1189,26 +1116,26 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
             <div className="space-y-6 relative">
               <div className="space-y-6">
                 <div className="text-center mb-4">
-                  <h3 className="text-lg font-black text-slate-800">Behavioral Habits & Quirks</h3>
-                  <p className="text-xs font-semibold text-slate-500">Fun texting metrics calculated purely on your message patterns.</p>
+                  <h3 className="text-lg font-bold text-[#20090f]">Behavioral Habits & Quirks</h3>
+                  <p className="text-xs font-semibold text-[#6b4a56]">Fun texting metrics calculated purely on your message patterns.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Greetings */}
-                  <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md space-y-4">
-                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  <div className="premium-card rounded-3xl p-6 space-y-4">
+                    <h4 className="text-xs font-bold text-[#6b4a56] border-b border-slate-100 pb-2">
                       ☀️ Morning vs 🌙 Night Greetings
                     </h4>
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                      <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56]">
                         <span>Good Morning Texts Sent (6am - 10am)</span>
-                        <span className="text-rose-500 font-black">
+                        <span className="text-rose-500 font-bold">
                           {renderTeasedValue(`${p1}: ${morningTexts[p1]} | ${p2}: ${morningTexts[p2]}`, "p1: 48 | p2: 12")}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-600 border-t border-slate-100/50 pt-3">
+                      <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56] border-t border-slate-100/50 pt-3">
                         <span>Good Night Texts Sent (10pm - 2am)</span>
-                        <span className="text-indigo-500 font-black">
+                        <span className="text-indigo-500 font-bold">
                           {renderTeasedValue(`${p1}: ${nightTexts[p1]} | ${p2}: ${nightTexts[p2]}`, "p1: 85 | p2: 124")}
                         </span>
                       </div>
@@ -1216,15 +1143,15 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   </div>
 
                   {/* Desperation */}
-                  <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md space-y-4">
-                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  <div className="premium-card rounded-3xl p-6 space-y-4">
+                    <h4 className="text-xs font-bold text-[#6b4a56] border-b border-slate-100 pb-2">
                       🤡 Spam Desperation Meter
                     </h4>
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold text-slate-600">
+                      <p className="text-xs font-semibold text-[#6b4a56]">
                         Maximum number of consecutive texts sent in a row before receiving a reply:
                       </p>
-                      <div className="flex justify-between items-end font-black text-sm text-rose-500 pt-2">
+                      <div className="flex justify-between items-end font-bold text-sm text-rose-500 pt-2">
                         <span>{p1}: {renderTeasedValue(`${maxConsecutiveTexts[p1]} texts`, "14 texts")}</span>
                         <span>{p2}: {renderTeasedValue(`${maxConsecutiveTexts[p2]} texts`, "4 texts")}</span>
                       </div>
@@ -1232,20 +1159,20 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   </div>
 
                   {/* Vocabulary size */}
-                  <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md space-y-4">
-                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  <div className="premium-card rounded-3xl p-6 space-y-4">
+                    <h4 className="text-xs font-bold text-[#6b4a56] border-b border-slate-100 pb-2">
                       🗣️ Vocabulary Size (Unique Words)
                     </h4>
                     <div className="space-y-3.5">
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                      <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56]">
                         <span>{p1}'s Unique Words count</span>
-                        <span className="text-rose-500 font-black">
+                        <span className="text-rose-500 font-bold">
                           {renderTeasedValue(`${uniqueWordsCount[p1]?.toLocaleString()} words`, "4,821 words")}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-600 border-t border-slate-100/50 pt-3">
+                      <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56] border-t border-slate-100/50 pt-3">
                         <span>{p2}'s Unique Words count</span>
-                        <span className="text-indigo-500 font-black">
+                        <span className="text-indigo-500 font-bold">
                           {renderTeasedValue(`${uniqueWordsCount[p2]?.toLocaleString()} words`, "3,281 words")}
                         </span>
                       </div>
@@ -1253,20 +1180,20 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                   </div>
 
                   {/* Media counts */}
-                  <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md space-y-4">
-                    <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider border-b border-slate-100 pb-2">
+                  <div className="premium-card rounded-3xl p-6 space-y-4">
+                    <h4 className="text-xs font-bold text-[#6b4a56] border-b border-slate-100 pb-2">
                       🎙️ Media & Voice Notes Count
                     </h4>
                     <div className="space-y-3.5">
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                      <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56]">
                         <span>{p1}'s Media Attachments</span>
-                        <span className="text-rose-500 font-black">
+                        <span className="text-rose-500 font-bold">
                           {renderTeasedValue(`${mediaCounts[p1]} files`, "421 files")}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center text-xs font-bold text-slate-600 border-t border-slate-100/50 pt-3">
+                      <div className="flex justify-between items-center text-xs font-bold text-[#6b4a56] border-t border-slate-100/50 pt-3">
                         <span>{p2}'s Media Attachments</span>
-                        <span className="text-indigo-500 font-black">
+                        <span className="text-indigo-500 font-bold">
                           {renderTeasedValue(`${mediaCounts[p2]} files`, "185 files")}
                         </span>
                       </div>
@@ -1280,41 +1207,41 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
           {/* TAB 6: EMOJI BATTLE */}
           {activeTab === "emojis" && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                <h3 className="text-sm font-black text-rose-500 uppercase tracking-wider mb-4 border-b border-rose-100/50 pb-2">{p1}'s Top Emojis</h3>
+              <div className="premium-card rounded-3xl p-6">
+                <h3 className="text-sm font-bold text-rose-500 mb-4 border-b border-rose-100/50 pb-2">{p1}'s Top Emojis</h3>
                 {topEmojis[p1] && topEmojis[p1].length > 0 ? (
                   <div className="space-y-3">
                     {topEmojis[p1].map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between bg-white border border-rose-100/30 p-3 rounded-2xl shadow-sm">
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">{item.emoji}</span>
-                          <span className="text-xs font-black text-slate-600">Rank #{idx + 1}</span>
+                          <span className="text-xs font-bold text-[#6b4a56]">Rank #{idx + 1}</span>
                         </div>
-                        <span className="text-xs font-black text-rose-500 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full">{item.count} times</span>
+                        <span className="text-xs font-bold text-rose-500 bg-rose-50 border border-rose-100 px-3 py-1 rounded-full">{item.count} times</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="py-8 text-center text-slate-400 text-xs font-semibold">No emojis detected.</div>
+                  <div className="py-8 text-center text-[#a78e97] text-xs font-semibold">No emojis detected.</div>
                 )}
               </div>
 
-              <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                <h3 className="text-sm font-black text-indigo-500 uppercase tracking-wider mb-4 border-b border-indigo-100/50 pb-2">{p2}'s Top Emojis</h3>
+              <div className="premium-card rounded-3xl p-6">
+                <h3 className="text-sm font-bold text-indigo-500 mb-4 border-b border-indigo-100/50 pb-2">{p2}'s Top Emojis</h3>
                 {topEmojis[p2] && topEmojis[p2].length > 0 ? (
                   <div className="space-y-3">
                     {topEmojis[p2].map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between bg-white border border-indigo-100/30 p-3 rounded-2xl shadow-sm">
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">{item.emoji}</span>
-                          <span className="text-xs font-black text-slate-600">Rank #{idx + 1}</span>
+                          <span className="text-xs font-bold text-[#6b4a56]">Rank #{idx + 1}</span>
                         </div>
-                        <span className="text-xs font-black text-indigo-500 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full">{item.count} times</span>
+                        <span className="text-xs font-bold text-indigo-500 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full">{item.count} times</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="py-8 text-center text-slate-400 text-xs font-semibold">No emojis detected.</div>
+                  <div className="py-8 text-center text-[#a78e97] text-xs font-semibold">No emojis detected.</div>
                 )}
               </div>
             </div>
@@ -1323,8 +1250,8 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
           {/* TAB 7: ACTIVITY RHYTHM */}
           {activeTab === "activity" && (
             <div className="space-y-6">
-              <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <div className="premium-card rounded-3xl p-6">
+                <h3 className="text-sm font-bold text-[#20090f] mb-4 flex items-center gap-2">
                   <BarChart2 className="text-rose-500" size={16} /> Daily Texting Rhythm
                 </h3>
                 <div className="h-64 w-full">
@@ -1351,8 +1278,8 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-white/60 bg-white/70 p-6 shadow-md backdrop-blur-md">
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <div className="premium-card rounded-3xl p-6">
+                <h3 className="text-sm font-bold text-[#20090f] mb-4 flex items-center gap-2">
                   <Calendar className="text-rose-500" size={16} /> Active Days of the Week
                 </h3>
                 <div className="h-60 w-full">
@@ -1375,22 +1302,16 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
 
       </div>
 
-      {/* Sticky unlock CTA — always visible when locked, so non-scrollers still convert */}
+      {/* Sticky unlock bar: always there while locked */}
       {!isUnlocked && (
-        <div className="fixed bottom-0 inset-x-0 z-40 p-3 sm:p-4 pointer-events-none">
-          <div className="pointer-events-auto mx-auto max-w-xl flex items-center justify-between gap-3 rounded-2xl border border-rose-200/60 bg-white/90 backdrop-blur-md px-4 py-3 shadow-xl shadow-rose-200/40">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="h-9 w-9 rounded-xl bg-rose-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm"><Lock size={15} /></span>
-              <div className="min-w-0">
-                <p className="text-xs font-black text-slate-800 truncate">{isBalanced ? "Who edges ahead? 👀" : `Who's putting in ${effortLeaderPct}%? 👀`}</p>
-                <p className="text-[10px] font-semibold text-slate-500 truncate">Unlock the verdict + 15 insights · lifetime access</p>
-              </div>
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 p-3 sm:p-4">
+          <div className="pointer-events-auto mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl bg-[#20090f] px-4 py-3 text-white shadow-[0_20px_50px_-20px_rgba(32,9,15,0.8)]">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{isBalanced ? "Who edges ahead? 👀" : `Who's putting in ${effortLeaderPct}%? 👀`}</p>
+              <p className="truncate text-xs text-white/60">The verdict + your full report · one-time</p>
             </div>
-            <button
-              onClick={() => setIsPaywallOpen(true)}
-              className="whitespace-nowrap rounded-xl bg-rose-500 hover:bg-rose-600 px-4 py-2.5 text-xs font-black text-white shadow-md shadow-rose-200 active:scale-95 transition-all"
-            >
-              Unlock {price}
+            <button onClick={() => openPaywall("sticky_bar")} className="premium-btn-rose whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-semibold">
+              Reveal · {price}
             </button>
           </div>
         </div>
@@ -1415,34 +1336,22 @@ export default function Dashboard({ stats, onReset, price = "₹249", checkoutUr
             transition={{ type: "spring", damping: 20, stiffness: 300 }}
             className="fixed bottom-20 sm:bottom-24 right-4 sm:right-6 z-50 max-w-[300px] w-full"
           >
-            <div className="relative rounded-2xl border border-rose-200/60 bg-white/95 backdrop-blur-md p-4 shadow-2xl shadow-rose-200/30">
-              {/* Dismiss button */}
+            <div className="premium-card relative rounded-2xl p-4">
               <button
                 onClick={() => { setExitToastVisible(false); setExitToastDismissed(true); }}
-                className="absolute top-2 right-2 h-5 w-5 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-xs hover:bg-rose-100 hover:text-rose-500 transition-colors"
+                className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full text-[#a78e97] hover:bg-[#fff1f3] hover:text-[#e11d48]"
                 aria-label="Dismiss"
               >
                 ✕
               </button>
-              <div className="flex items-start gap-3">
-                <span className="h-10 w-10 rounded-xl bg-gradient-to-br from-rose-500 to-indigo-500 text-white flex items-center justify-center flex-shrink-0 text-lg shadow-sm">
-                  👀
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs font-black text-slate-800 leading-tight">
-                    Psst — you scrolled past the good stuff
-                  </p>
-                  <p className="text-[10px] font-semibold text-slate-500 mt-1 leading-snug">
-                    You're 1 tap away from seeing who's really more invested.
-                  </p>
-                  <button
-                    onClick={() => { setExitToastVisible(false); setExitToastDismissed(true); setIsPaywallOpen(true); }}
-                    className="mt-2.5 rounded-lg bg-rose-500 hover:bg-rose-600 px-3.5 py-1.5 text-[11px] font-black text-white shadow-sm active:scale-95 transition-all"
-                  >
-                    Reveal now · {price}
-                  </button>
-                </div>
-              </div>
+              <p className="pr-6 text-sm font-semibold leading-tight text-[#20090f]">You scrolled past the answer 👀</p>
+              <p className="mt-1 text-xs leading-snug text-[#6b4a56]">It&apos;s already worked out from your chat. One tap to see who&apos;s more invested.</p>
+              <button
+                onClick={() => { setExitToastVisible(false); setExitToastDismissed(true); openPaywall("exit_nudge"); }}
+                className="premium-btn-rose mt-3 rounded-xl px-4 py-2 text-xs font-semibold"
+              >
+                Reveal now · {price}
+              </button>
             </div>
           </motion.div>
         )}

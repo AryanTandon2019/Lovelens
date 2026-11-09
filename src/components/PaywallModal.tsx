@@ -241,7 +241,7 @@ export default function PaywallModal({ isOpen, onClose, onSuccess, price = "₹2
                   "Who chases more: double texts and longest silence",
                   "Red & green flags audit",
                   "Your honeymoon timeline and inside jokes",
-                  "A shareable love card",
+                  "The verdict on your share card, plus a PDF",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2.5 text-[13px] font-medium text-[#20090f]">
                     <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-[#e11d48] text-white"><Check size={10} strokeWidth={3} /></span>

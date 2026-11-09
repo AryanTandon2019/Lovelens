@@ -863,7 +863,7 @@ export default function Home() {
                   "Who said \"I love you\" first",
                   "Who chases more and the longest silence",
                   "Red & green flags, honeymoon timeline, inside jokes",
-                  "A shareable love card",
+                  "The verdict on your share card, plus a PDF",
                 ].map((x) => (
                   <li key={x} className="flex items-start gap-2.5"><Check size={16} className="mt-0.5 flex-shrink-0 text-[#fb7185]" /> {x}</li>
                 ))}
